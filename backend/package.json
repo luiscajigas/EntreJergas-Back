@@ -1,0 +1,24 @@
+{
+  "name": "entrejergas-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5",
+    "nodemon": "^3.1.10"
+  }
+}
