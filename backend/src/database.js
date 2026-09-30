@@ -41,6 +41,21 @@ async function initializeDatabase(databasePool = pool) {
   const client = await databasePool.connect();
   try {
     await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id BIGSERIAL PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS expressions (
         id BIGSERIAL PRIMARY KEY,
         normalized_expression TEXT NOT NULL UNIQUE,
@@ -57,14 +72,24 @@ async function initializeDatabase(databasePool = pool) {
 
       CREATE TABLE IF NOT EXISTS search_history (
         id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
         searched_expression TEXT NOT NULL,
         normalized_expression TEXT NOT NULL,
         found BOOLEAN NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE search_history
+        ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id
+        ON user_sessions(user_id);
+
       CREATE INDEX IF NOT EXISTS idx_search_history_created_at
         ON search_history(created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_search_history_user_created_at
+        ON search_history(user_id, created_at DESC);
     `);
 
     await client.query('BEGIN');

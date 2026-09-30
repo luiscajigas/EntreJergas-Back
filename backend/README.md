@@ -17,16 +17,20 @@ npm install
 npm run dev
 ```
 
-El servidor escucha en `http://localhost:3000`. Para Render, los comandos configurados en `render.yaml` son `npm install` y `npm start`. En el primer arranque se crean `expressions` y `search_history` y se insertan expresiones semilla sin duplicarlas.
+El servidor escucha en `http://localhost:3000`. Para Render, los comandos configurados en `render.yaml` son `npm install` y `npm start`. En el primer arranque se crean `users`, `user_sessions`, `expressions` y `search_history`, y se insertan expresiones semilla sin duplicarlas. En bases existentes se agrega `search_history.user_id` para asociar las consultas nuevas con su cuenta.
 
 ## Contrato
 
 - `GET /api/health`: confirma que API y PostgreSQL responden.
-- `POST /api/lookup` con `{ "expression": "parcero" }`: busca primero en la tabla `expressions` y guarda cada consulta en historial.
-- `GET /api/history`: devuelve las últimas 30 búsquedas.
-- `GET /api/dashboard`: devuelve totales y expresiones agrupadas por región.
+- `POST /api/auth/register` con `{ "name", "email", "password" }`: crea una cuenta y abre una sesión.
+- `POST /api/auth/login` con `{ "email", "password" }`: valida las credenciales y abre una sesión.
+- `GET /api/auth/me`: devuelve la cuenta de la sesión actual.
+- `POST /api/auth/logout`: revoca la sesión actual.
+- `POST /api/lookup` con `{ "expression": "parcero" }`: requiere sesión, busca primero en `expressions` y guarda la consulta asociada al usuario.
+- `GET /api/history`: requiere sesión y devuelve las últimas 30 búsquedas de esa cuenta.
+- `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
-La búsqueda responde `{ "found": false, "entry": null, "message": "..." }` cuando la expresión no existe; no llama a IA. Se aceptan hasta 100 caracteres.
+Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. La búsqueda responde `{ "found": false, "entry": null, "message": "..." }` cuando la expresión no existe; no llama a IA. Se aceptan hasta 100 caracteres.
 
 ## Pruebas
 
