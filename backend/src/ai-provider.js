@@ -20,13 +20,15 @@ function createAiProvider({
   apiKey = process.env.LLM_API_KEY,
   endpoint = process.env.LLM_API_URL || defaultEndpoint,
   model = process.env.LLM_MODEL || 'gemini-3.8-flash',
-  fetchImplementation = fetch
+  fetchImplementation = fetch,
+  waitImplementation = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  randomImplementation = Math.random
 } = {}) {
   if (!apiKey) return async () => null;
 
   return async (expression) => {
     let payload;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       const response = await fetchImplementation(endpoint, {
         method: 'POST',
         headers: {
@@ -45,7 +47,7 @@ function createAiProvider({
             { role: 'user', content: `Expresión: ${expression}` }
           ]
         }),
-        signal: AbortSignal.timeout(12000)
+        signal: AbortSignal.timeout(7000)
       });
 
       if (response.ok) {
@@ -62,8 +64,12 @@ function createAiProvider({
       }
 
       const transient = response.status === 408 || response.status === 429 || response.status >= 500;
-      if (transient && attempt === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 + Math.floor(Math.random() * 250)));
+      if (transient && attempt < 2) {
+        const retryAfter = Number(response.headers?.get('retry-after')) * 1000;
+        const backoff = 1000 * (2 ** attempt) + Math.floor(randomImplementation() * 250);
+        await waitImplementation(Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter, 5000)
+          : backoff);
         continue;
       }
 

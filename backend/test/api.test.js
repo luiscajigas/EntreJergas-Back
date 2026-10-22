@@ -286,7 +286,7 @@ test('proveedor IA desactivado sin clave y descarta respuestas incompletas', asy
   assert.equal(await invalidProvider('palabra'), null);
 });
 
-test('proveedor IA reintenta una vez ante 503 y completa la definición', async () => {
+test('proveedor IA reintenta ante 503 y completa la definición', async () => {
   let calls = 0;
   const generateDefinition = createAiProvider({
     apiKey: 'test-key',
@@ -339,4 +339,22 @@ test('un 503 de Gemini explica el fallo y no guarda la expresión citada', async
   assert.equal(result.found, false);
   assert.match(result.message, /Gemini no pudo responder.*503.*no se agregó/);
   assert.equal(saved.rows.length, 0);
+});
+
+test('proveedor IA limita los reintentos y usa espera exponencial', async () => {
+  let calls = 0;
+  const waits = [];
+  const generateDefinition = createAiProvider({
+    apiKey: 'test-key',
+    fetchImplementation: async () => {
+      calls += 1;
+      return { ok: false, status: 503, json: async () => ({ error: { message: 'UNAVAILABLE' } }) };
+    },
+    waitImplementation: async (milliseconds) => waits.push(milliseconds),
+    randomImplementation: () => 0
+  });
+
+  await assert.rejects(generateDefinition('palabra nueva'), { status: 503 });
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [1000, 2000]);
 });
