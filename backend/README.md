@@ -8,7 +8,7 @@ Edita `.env` para desarrollo local y define `DATABASE_URL` con la cadena de cone
 
 En Render crea primero una base PostgreSQL y un servicio web a partir de este repositorio. El `render.yaml` pide `DATABASE_URL` y `CORS_ORIGIN`: usa la **Internal Database URL** de Render y el origen exacto de Vercel, por ejemplo `https://entrejergas.vercel.app`. Render asigna `PORT`; `NODE_ENV=production` habilita SSL en la conexión PostgreSQL. La conexión que usa pgAdmin desde tu PC es la externa; no uses el hostname interno de Render fuera de sus servicios.
 
-La IA es opcional y se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del servicio (por ejemplo, Render), nunca en Angular ni en Vercel como variable expuesta al navegador. El proveedor usa por defecto el endpoint compatible con OpenAI `https://api.openai.com/v1/chat/completions` y el modelo `gpt-4o-mini`; puedes cambiarlo con `LLM_API_URL` y `LLM_MODEL`. Sin clave, si el proveedor falla o responde con datos inválidos, el diccionario sigue disponible y el lookup conserva la respuesta de expresión no encontrada.
+La IA se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del servicio (localmente en `.env` o en Render), nunca en Angular ni en Vercel. El proveedor predeterminado es Gemini mediante su endpoint compatible con OpenAI, con el modelo `gemini-3.8-flash`; puedes cambiar el endpoint con `LLM_API_URL` y el modelo con `LLM_MODEL`. Cada respuesta tiene un máximo de 400 tokens. Sin clave, si el proveedor falla o responde con datos inválidos, el diccionario sigue disponible y el lookup conserva la respuesta de expresión no encontrada.
 
 ## Desarrollo y despliegue
 

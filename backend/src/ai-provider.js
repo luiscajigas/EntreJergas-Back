@@ -1,4 +1,4 @@
-const defaultEndpoint = 'https://api.openai.com/v1/chat/completions';
+const defaultEndpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 const definitionFields = ['meaning', 'region', 'context', 'equivalent', 'example'];
 
@@ -17,7 +17,7 @@ function validateDefinition(value, expression) {
 function createAiProvider({
   apiKey = process.env.LLM_API_KEY,
   endpoint = process.env.LLM_API_URL || defaultEndpoint,
-  model = process.env.LLM_MODEL || 'gpt-4o-mini',
+  model = process.env.LLM_MODEL || 'gemini-3.8-flash',
   fetchImplementation = fetch
 } = {}) {
   if (!apiKey) return async () => null;
@@ -32,6 +32,7 @@ function createAiProvider({
       body: JSON.stringify({
         model,
         temperature: 0.2,
+        max_tokens: 400,
         response_format: { type: 'json_object' },
         messages: [
           {

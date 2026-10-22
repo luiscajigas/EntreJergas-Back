@@ -212,13 +212,11 @@ test('incluye migración idempotente para el historial de instalaciones existent
   assert.match(statements.join('\n'), /ADD COLUMN IF NOT EXISTS result_source TEXT NOT NULL DEFAULT 'not_found'/i);
 });
 
-test('proveedor IA valida respuestas JSON y permite configurar endpoint y modelo', async () => {
+test('proveedor IA valida JSON y usa Gemini con respuestas acotadas por defecto', async () => {
   let requestedUrl;
   let requestedBody;
   const generateDefinition = createAiProvider({
     apiKey: 'test-key',
-    endpoint: 'https://llm.example.test/chat',
-    model: 'test-model',
     fetchImplementation: async (url, options) => {
       requestedUrl = url;
       requestedBody = JSON.parse(options.body);
@@ -238,8 +236,9 @@ test('proveedor IA valida respuestas JSON y permite configurar endpoint y modelo
   });
 
   const definition = await generateDefinition('palabra nueva');
-  assert.equal(requestedUrl, 'https://llm.example.test/chat');
-  assert.equal(requestedBody.model, 'test-model');
+  assert.equal(requestedUrl, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+  assert.equal(requestedBody.model, 'gemini-3.8-flash');
+  assert.equal(requestedBody.max_tokens, 400);
   assert.equal(definition.expression, 'palabra nueva');
   assert.equal(definition.meaning, 'Significado');
 });
