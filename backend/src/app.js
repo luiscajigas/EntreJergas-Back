@@ -294,7 +294,9 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
       found: Boolean(entry),
       entry,
       message: entry ? undefined : providerFailed
-        ? `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
+        ? providerErrorStatus === 429
+          ? 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.'
+          : `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
         : 'Todavía no tenemos esta expresión en el diccionario.'
     });
   });

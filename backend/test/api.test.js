@@ -341,6 +341,34 @@ test('un 503 de Gemini explica el fallo y no guarda la expresión citada', async
   assert.equal(saved.rows.length, 0);
 });
 
+test('un 429 explica que se alcanzó la cuota y no agrega la expresión', async () => {
+  const { cookie } = await registerUser();
+  const limitedServer = createApp(pool, {
+    generateDefinition: async () => {
+      const error = new Error('RESOURCE_EXHAUSTED');
+      error.status = 429;
+      throw error;
+    }
+  }).listen(0);
+  await new Promise((resolve) => limitedServer.once('listening', resolve));
+
+  const response = await fetch(`http://127.0.0.1:${limitedServer.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: '“palabra con cuota”' })
+  });
+  const result = await response.json();
+  const saved = await pool.query(
+    'SELECT id FROM expressions WHERE normalized_expression = $1',
+    ['palabra con cuota']
+  );
+  await new Promise((resolve, reject) => limitedServer.close((error) => error ? reject(error) : resolve()));
+
+  assert.equal(result.found, false);
+  assert.match(result.message, /límite de solicitudes de este proyecto/);
+  assert.equal(saved.rows.length, 0);
+});
+
 test('proveedor IA limita los reintentos y usa espera exponencial', async () => {
   let calls = 0;
   const waits = [];
@@ -357,6 +385,23 @@ test('proveedor IA limita los reintentos y usa espera exponencial', async () => 
   await assert.rejects(generateDefinition('palabra nueva'), { status: 503 });
   assert.equal(calls, 3);
   assert.deepEqual(waits, [1000, 2000]);
+});
+
+test('proveedor IA no reintenta un 429 de cuota', async () => {
+  let calls = 0;
+  const waits = [];
+  const generateDefinition = createAiProvider({
+    apiKey: 'test-key',
+    fetchImplementation: async () => {
+      calls += 1;
+      return { ok: false, status: 429, json: async () => ({ error: { message: 'RESOURCE_EXHAUSTED' } }) };
+    },
+    waitImplementation: async (milliseconds) => waits.push(milliseconds)
+  });
+
+  await assert.rejects(generateDefinition('palabra nueva'), { status: 429 });
+  assert.equal(calls, 1);
+  assert.deepEqual(waits, []);
 });
 
 test('proveedor IA reintenta los timeouts y termina con error 504', async () => {

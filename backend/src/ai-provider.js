@@ -80,7 +80,7 @@ function createAiProvider({
         // El proveedor puede responder con un cuerpo no JSON.
       }
 
-      const transient = response.status === 408 || response.status === 429 || response.status >= 500;
+      const transient = response.status === 408 || response.status >= 500;
       if (transient && attempt < 2) {
         const retryAfter = Number(response.headers?.get('retry-after')) * 1000;
         const backoff = 1000 * (2 ** attempt) + Math.floor(randomImplementation() * 250);
