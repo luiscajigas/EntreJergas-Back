@@ -285,3 +285,58 @@ test('proveedor IA desactivado sin clave y descarta respuestas incompletas', asy
   });
   assert.equal(await invalidProvider('palabra'), null);
 });
+
+test('proveedor IA reintenta una vez ante 503 y completa la definición', async () => {
+  let calls = 0;
+  const generateDefinition = createAiProvider({
+    apiKey: 'test-key',
+    fetchImplementation: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return { ok: false, status: 503, json: async () => ({ error: { message: 'UNAVAILABLE' } }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify({
+          meaning: 'Significado',
+          region: 'Región',
+          context: 'Contexto',
+          equivalent: 'Equivalente',
+          example: 'Ejemplo'
+        }) } }] })
+      };
+    }
+  });
+
+  const definition = await generateDefinition('palabra nueva');
+  assert.equal(calls, 2);
+  assert.equal(definition.meaning, 'Significado');
+});
+
+test('un 503 de Gemini explica el fallo y no guarda la expresión citada', async () => {
+  const { cookie } = await registerUser();
+  const unavailableServer = createApp(pool, {
+    generateDefinition: async () => {
+      const error = new Error('UNAVAILABLE');
+      error.status = 503;
+      throw error;
+    }
+  }).listen(0);
+  await new Promise((resolve) => unavailableServer.once('listening', resolve));
+
+  const response = await fetch(`http://127.0.0.1:${unavailableServer.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: '“cachon”' })
+  });
+  const result = await response.json();
+  const saved = await pool.query(
+    'SELECT id FROM expressions WHERE normalized_expression = $1',
+    ['cachon']
+  );
+  await new Promise((resolve, reject) => unavailableServer.close((error) => error ? reject(error) : resolve()));
+
+  assert.equal(result.found, false);
+  assert.match(result.message, /Gemini no pudo responder.*503.*no se agregó/);
+  assert.equal(saved.rows.length, 0);
+});

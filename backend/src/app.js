@@ -236,6 +236,8 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
       [normalized]
     );
     let entry = result.rows[0] ? serializeExpression(result.rows[0]) : null;
+    let providerErrorStatus = null;
+    let providerFailed = false;
     if (!entry) {
       try {
         const definition = await generateDefinition(expression);
@@ -273,6 +275,8 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
           }
         }
       } catch (error) {
+        providerFailed = true;
+        providerErrorStatus = error.status || null;
         console.error('No se pudo generar una definición con IA:', error.message);
       }
     }
@@ -289,7 +293,9 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
     return response.json({
       found: Boolean(entry),
       entry,
-      message: entry ? undefined : 'Todavía no tenemos esta expresión en el diccionario.'
+      message: entry ? undefined : providerFailed
+        ? `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
+        : 'Todavía no tenemos esta expresión en el diccionario.'
     });
   });
 
