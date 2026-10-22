@@ -2,6 +2,8 @@ const defaultEndpoint = 'https://generativelanguage.googleapis.com/v1beta/openai
 
 const definitionFields = ['meaning', 'region', 'context', 'equivalent', 'example'];
 
+//3
+
 function validateDefinition(value, expression) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
