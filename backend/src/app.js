@@ -238,9 +238,10 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
     }
 
     await pool.query(`
-      INSERT INTO search_history (user_id, searched_expression, normalized_expression, found)
-      VALUES ($1, $2, $3, $4)
-    `, [request.user.id, expression, normalized, Boolean(entry)]);
+      INSERT INTO search_history
+        (user_id, searched_expression, normalized_expression, found, result_source)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [request.user.id, expression, normalized, Boolean(entry), entry?.source || 'not_found']);
 
     return response.json({
       found: Boolean(entry),
@@ -251,7 +252,8 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
 
   app.get('/api/history', requireAuthentication, async (request, response) => {
     const result = await pool.query(`
-      SELECT id, searched_expression AS expression, found, created_at AS "createdAt"
+      SELECT id, searched_expression AS expression, found, result_source AS source,
+        created_at AS "createdAt"
       FROM search_history
       WHERE user_id = $1
       ORDER BY id DESC

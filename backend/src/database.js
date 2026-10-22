@@ -76,11 +76,19 @@ async function initializeDatabase(databasePool = pool) {
         searched_expression TEXT NOT NULL,
         normalized_expression TEXT NOT NULL,
         found BOOLEAN NOT NULL,
+        result_source TEXT NOT NULL DEFAULT 'not_found',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
       ALTER TABLE search_history
         ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
+      ALTER TABLE search_history
+        ADD COLUMN IF NOT EXISTS result_source TEXT NOT NULL DEFAULT 'not_found';
+
+      UPDATE search_history
+      SET result_source = CASE WHEN found THEN 'database' ELSE 'not_found' END
+      WHERE result_source = 'not_found' AND found = TRUE;
 
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id
         ON user_sessions(user_id);

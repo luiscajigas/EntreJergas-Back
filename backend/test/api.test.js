@@ -148,6 +148,9 @@ test('lookup prioriza el diccionario y usa IA para expresiones que no existen', 
   const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
   assert.equal(history.items.length, 3);
   assert.equal(history.items[0].expression, 'una frase nueva');
+  assert.equal(history.items[0].source, 'ai');
+  assert.equal(history.items[1].source, 'not_found');
+  assert.equal(history.items[2].source, 'database');
 
   const dashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie } }).then((response) => response.json());
   assert.equal(dashboard.expressions, 16);
@@ -206,6 +209,7 @@ test('incluye migración idempotente para el historial de instalaciones existent
 
   const migration = statements.find((statement) => statement.includes('ALTER TABLE search_history'));
   assert.match(migration, /ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users\(id\) ON DELETE SET NULL/i);
+  assert.match(statements.join('\n'), /ADD COLUMN IF NOT EXISTS result_source TEXT NOT NULL DEFAULT 'not_found'/i);
 });
 
 test('proveedor IA valida respuestas JSON y permite configurar endpoint y modelo', async () => {
