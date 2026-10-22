@@ -358,3 +358,24 @@ test('proveedor IA limita los reintentos y usa espera exponencial', async () => 
   assert.equal(calls, 3);
   assert.deepEqual(waits, [1000, 2000]);
 });
+
+test('proveedor IA reintenta los timeouts y termina con error 504', async () => {
+  let calls = 0;
+  const waits = [];
+  const generateDefinition = createAiProvider({
+    apiKey: 'test-key',
+    fetchImplementation: async () => {
+      calls += 1;
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    },
+    waitImplementation: async (milliseconds) => waits.push(milliseconds),
+    randomImplementation: () => 0
+  });
+
+  await assert.rejects(generateDefinition('palabra nueva'), {
+    status: 504,
+    message: 'Gemini agotó el tiempo de espera.'
+  });
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [1000, 2000]);
+});
