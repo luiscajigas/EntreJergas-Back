@@ -2,6 +2,7 @@ const cors = require('cors');
 const express = require('express');
 const { createHash, randomBytes, scrypt, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
+const { createAiProvider } = require('./ai-provider');
 
 const scryptAsync = promisify(scrypt);
 const sessionCookieName = 'entrejergas_session';
@@ -100,7 +101,7 @@ async function createSession(pool, user, response) {
   setSessionCookie(response, token);
 }
 
-function createApp(pool) {
+function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
   const app = express();
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
     .split(',')
@@ -218,7 +219,23 @@ function createApp(pool) {
       'SELECT * FROM expressions WHERE normalized_expression = $1',
       [normalized]
     );
-    const entry = result.rows[0] || null;
+    let entry = result.rows[0] ? serializeExpression(result.rows[0]) : null;
+    if (!entry) {
+      try {
+        const definition = await generateDefinition(expression);
+        if (definition) {
+          entry = {
+            id: null,
+            ...definition,
+            pronunciation: null,
+            audioUrl: null,
+            source: 'ai'
+          };
+        }
+      } catch (error) {
+        console.error('No se pudo generar una definición con IA:', error.message);
+      }
+    }
 
     await pool.query(`
       INSERT INTO search_history (user_id, searched_expression, normalized_expression, found)
@@ -227,7 +244,7 @@ function createApp(pool) {
 
     return response.json({
       found: Boolean(entry),
-      entry: entry ? serializeExpression(entry) : null,
+      entry,
       message: entry ? undefined : 'Todavía no tenemos esta expresión en el diccionario.'
     });
   });

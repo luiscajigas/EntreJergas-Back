@@ -8,7 +8,7 @@ Edita `.env` para desarrollo local y define `DATABASE_URL` con la cadena de cone
 
 En Render crea primero una base PostgreSQL y un servicio web a partir de este repositorio. El `render.yaml` pide `DATABASE_URL` y `CORS_ORIGIN`: usa la **Internal Database URL** de Render y el origen exacto de Vercel, por ejemplo `https://entrejergas.vercel.app`. Render asigna `PORT`; `NODE_ENV=production` habilita SSL en la conexión PostgreSQL. La conexión que usa pgAdmin desde tu PC es la externa; no uses el hostname interno de Render fuera de sus servicios.
 
-El archivo incluye `LLM_API_KEY` como espacio reservado, pero la beta todavía no la utiliza. Cuando se integre un proveedor de IA, configura esa clave en el backend/Render, nunca en Angular ni en Vercel como variable expuesta al navegador.
+La IA es opcional y se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del servicio (por ejemplo, Render), nunca en Angular ni en Vercel como variable expuesta al navegador. El proveedor usa por defecto el endpoint compatible con OpenAI `https://api.openai.com/v1/chat/completions` y el modelo `gpt-4o-mini`; puedes cambiarlo con `LLM_API_URL` y `LLM_MODEL`. Sin clave, si el proveedor falla o responde con datos inválidos, el diccionario sigue disponible y el lookup conserva la respuesta de expresión no encontrada.
 
 ## Desarrollo y despliegue
 
@@ -26,11 +26,11 @@ El servidor escucha en `http://localhost:3000`. Para Render, los comandos config
 - `POST /api/auth/login` con `{ "email", "password" }`: valida las credenciales y abre una sesión.
 - `GET /api/auth/me`: devuelve la cuenta de la sesión actual.
 - `POST /api/auth/logout`: revoca la sesión actual.
-- `POST /api/lookup` con `{ "expression": "parcero" }`: requiere sesión, busca primero en `expressions` y guarda la consulta asociada al usuario.
+- `POST /api/lookup` con `{ "expression": "parcero" }`: requiere sesión, busca primero en `expressions`; si no existe, solicita una definición al proveedor IA configurado. Las respuestas incluyen `entry.source` (`database` o `ai`); las definiciones de IA no se insertan en el diccionario y cada consulta se guarda en el historial de la cuenta.
 - `GET /api/history`: requiere sesión y devuelve las últimas 30 búsquedas de esa cuenta.
 - `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
-Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. La búsqueda responde `{ "found": false, "entry": null, "message": "..." }` cuando la expresión no existe; no llama a IA. Se aceptan hasta 100 caracteres.
+Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. Si la IA está disponible pero no puede construir una definición válida, la búsqueda responde `{ "found": false, "entry": null, "message": "..." }`. Se aceptan hasta 100 caracteres.
 
 ## Pruebas
 

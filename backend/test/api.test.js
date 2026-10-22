@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
+const { createAiProvider } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
 
 let pool;
@@ -93,9 +94,26 @@ test('registro, login, sesión HttpOnly y logout funcionan', async () => {
   assert.equal(expiredSession.status, 401);
 });
 
-test('lookup normaliza tildes, registra búsquedas y conserva el contrato REST', async () => {
+test('lookup prioriza el diccionario y usa IA para expresiones que no existen', async () => {
   const { cookie } = await registerUser();
-  const knownResponse = await fetch(`${baseUrl}/api/lookup`, {
+  let generatedCount = 0;
+  const aiServer = createApp(pool, {
+    generateDefinition: async (expression) => {
+      generatedCount += 1;
+      return {
+        expression,
+        meaning: 'Expresión de prueba.',
+        region: 'No identificada con certeza',
+        context: 'Uso coloquial; verifica el contexto local.',
+        equivalent: 'frase equivalente',
+        example: `Dijo: ${expression}.`
+      };
+    }
+  }).listen(0);
+  await new Promise((resolve) => aiServer.once('listening', resolve));
+  const aiBaseUrl = `http://127.0.0.1:${aiServer.address().port}`;
+
+  const knownResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({ expression: '¿Qué chimba?' })
@@ -104,6 +122,7 @@ test('lookup normaliza tildes, registra búsquedas y conserva el contrato REST',
   assert.equal(known.found, true);
   assert.equal(known.entry.expression, 'qué chimba');
   assert.equal(known.entry.source, 'database');
+  assert.equal(generatedCount, 0);
 
   const missingResponse = await fetch(`${baseUrl}/api/lookup`, {
     method: 'POST',
@@ -114,13 +133,25 @@ test('lookup normaliza tildes, registra búsquedas y conserva el contrato REST',
   assert.equal(missing.found, false);
   assert.equal(missing.entry, null);
 
+  const aiResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: 'una frase nueva' })
+  });
+  const aiResult = await aiResponse.json();
+  assert.equal(aiResult.found, true);
+  assert.equal(aiResult.entry.source, 'ai');
+  assert.equal(aiResult.entry.id, null);
+  assert.equal(generatedCount, 1);
+  await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
+
   const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
-  assert.equal(history.items.length, 2);
+  assert.equal(history.items.length, 3);
   assert.equal(history.items[0].expression, 'una frase nueva');
 
   const dashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie } }).then((response) => response.json());
   assert.equal(dashboard.expressions, 16);
-  assert.equal(dashboard.searches, 2);
+  assert.equal(dashboard.searches, 3);
   assert.ok(dashboard.regions.every((region) => Number.isInteger(region.count)));
 });
 
@@ -175,4 +206,50 @@ test('incluye migración idempotente para el historial de instalaciones existent
 
   const migration = statements.find((statement) => statement.includes('ALTER TABLE search_history'));
   assert.match(migration, /ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users\(id\) ON DELETE SET NULL/i);
+});
+
+test('proveedor IA valida respuestas JSON y permite configurar endpoint y modelo', async () => {
+  let requestedUrl;
+  let requestedBody;
+  const generateDefinition = createAiProvider({
+    apiKey: 'test-key',
+    endpoint: 'https://llm.example.test/chat',
+    model: 'test-model',
+    fetchImplementation: async (url, options) => {
+      requestedUrl = url;
+      requestedBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({
+            meaning: 'Significado',
+            region: 'Región',
+            context: 'Contexto',
+            equivalent: 'Equivalente',
+            example: 'Ejemplo'
+          }) } }]
+        })
+      };
+    }
+  });
+
+  const definition = await generateDefinition('palabra nueva');
+  assert.equal(requestedUrl, 'https://llm.example.test/chat');
+  assert.equal(requestedBody.model, 'test-model');
+  assert.equal(definition.expression, 'palabra nueva');
+  assert.equal(definition.meaning, 'Significado');
+});
+
+test('proveedor IA desactivado sin clave y descarta respuestas incompletas', async () => {
+  const disabledProvider = createAiProvider({ apiKey: '' });
+  assert.equal(await disabledProvider('palabra'), null);
+
+  const invalidProvider = createAiProvider({
+    apiKey: 'test-key',
+    fetchImplementation: async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"meaning":"Solo esto"}' } }] })
+    })
+  });
+  assert.equal(await invalidProvider('palabra'), null);
 });
