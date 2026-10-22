@@ -67,8 +67,12 @@ async function initializeDatabase(databasePool = pool) {
         example TEXT NOT NULL,
         pronunciation TEXT,
         audio_url TEXT,
+        source TEXT NOT NULL DEFAULT 'database',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE expressions
+        ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'database';
 
       CREATE TABLE IF NOT EXISTS search_history (
         id BIGSERIAL PRIMARY KEY,

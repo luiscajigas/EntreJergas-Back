@@ -143,18 +143,40 @@ test('lookup prioriza el diccionario y usa IA para expresiones que no existen', 
   assert.equal(aiResult.entry.source, 'ai');
   assert.equal(aiResult.entry.id, null);
   assert.equal(generatedCount, 1);
+
+  const quotedResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: '“una frase nueva”' })
+  });
+  const quotedResult = await quotedResponse.json();
+  assert.equal(quotedResult.entry.expression, 'una frase nueva');
+  assert.equal(quotedResult.entry.source, 'ai');
+  assert.ok(quotedResult.entry.id);
+  assert.equal(generatedCount, 2);
+
+  const savedResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: 'una frase nueva' })
+  });
+  const savedResult = await savedResponse.json();
+  assert.equal(savedResult.entry.source, 'ai');
+  assert.equal(generatedCount, 2);
   await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
 
   const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
-  assert.equal(history.items.length, 3);
+  assert.equal(history.items.length, 5);
   assert.equal(history.items[0].expression, 'una frase nueva');
-  assert.equal(history.items[0].source, 'ai');
-  assert.equal(history.items[1].source, 'not_found');
-  assert.equal(history.items[2].source, 'database');
+  assert.equal(history.items[0].source, 'ai_saved');
+  assert.equal(history.items[1].source, 'ai_saved');
+  assert.equal(history.items[2].source, 'ai');
+  assert.equal(history.items[3].source, 'not_found');
+  assert.equal(history.items[4].source, 'database');
 
   const dashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie } }).then((response) => response.json());
-  assert.equal(dashboard.expressions, 16);
-  assert.equal(dashboard.searches, 3);
+  assert.equal(dashboard.expressions, 17);
+  assert.equal(dashboard.searches, 5);
   assert.ok(dashboard.regions.every((region) => Number.isInteger(region.count)));
 });
 
@@ -166,6 +188,13 @@ test('lookup valida longitud y atiende consultas simultáneas', async () => {
     body: JSON.stringify({ expression: 'x'.repeat(101) })
   });
   assert.equal(invalid.status, 400);
+
+  const emptyQuoted = await fetch(`${baseUrl}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: '"   "' })
+  });
+  assert.equal(emptyQuoted.status, 400);
 
   const responses = await Promise.all(Array.from({ length: 12 }, () => fetch(`${baseUrl}/api/lookup`, {
     method: 'POST',

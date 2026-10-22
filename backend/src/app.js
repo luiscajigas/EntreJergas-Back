@@ -18,6 +18,21 @@ function normalizeExpression(value) {
     .trim();
 }
 
+function parseQuotedExpression(value) {
+  const text = value.trim();
+  const quotePairs = { '"': '"', "'": "'", '“': '”', '‘': '’', '«': '»' };
+  const closingQuote = quotePairs[text[0]];
+
+  if (text.length < 2 || !closingQuote || !text.endsWith(closingQuote)) {
+    return { expression: text, explicitlySave: false };
+  }
+
+  return {
+    expression: text.slice(1, -1).trim(),
+    explicitlySave: true
+  };
+}
+
 function serializeExpression(row) {
   return {
     id: Number(row.id),
@@ -29,7 +44,7 @@ function serializeExpression(row) {
     example: row.example,
     pronunciation: row.pronunciation,
     audioUrl: row.audio_url,
-    source: 'database'
+    source: row.source === 'ai' ? 'ai' : 'database'
   };
 }
 
@@ -204,9 +219,10 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
   });
 
   app.post('/api/lookup', requireAuthentication, async (request, response) => {
-    const expression = typeof request.body?.expression === 'string'
-      ? request.body.expression.trim()
+    const rawExpression = typeof request.body?.expression === 'string'
+      ? request.body.expression
       : '';
+    const { expression, explicitlySave } = parseQuotedExpression(rawExpression);
 
     if (!expression || expression.length > 100) {
       return response.status(400).json({
@@ -224,24 +240,51 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
       try {
         const definition = await generateDefinition(expression);
         if (definition) {
-          entry = {
-            id: null,
-            ...definition,
-            pronunciation: null,
-            audioUrl: null,
-            source: 'ai'
-          };
+          if (explicitlySave) {
+            const inserted = await pool.query(`
+              INSERT INTO expressions (
+                normalized_expression, expression, meaning, region, context,
+                equivalent, example, source
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai')
+              ON CONFLICT (normalized_expression) DO NOTHING
+              RETURNING *
+            `, [
+              normalized,
+              definition.expression,
+              definition.meaning,
+              definition.region,
+              definition.context,
+              definition.equivalent,
+              definition.example
+            ]);
+            const saved = inserted.rows[0] || (await pool.query(
+              'SELECT * FROM expressions WHERE normalized_expression = $1',
+              [normalized]
+            )).rows[0];
+            entry = serializeExpression(saved);
+          } else {
+            entry = {
+              id: null,
+              ...definition,
+              pronunciation: null,
+              audioUrl: null,
+              source: 'ai'
+            };
+          }
         }
       } catch (error) {
         console.error('No se pudo generar una definición con IA:', error.message);
       }
     }
 
+    const historySource = entry?.source === 'ai' && entry.id !== null
+      ? 'ai_saved'
+      : entry?.source || 'not_found';
     await pool.query(`
       INSERT INTO search_history
         (user_id, searched_expression, normalized_expression, found, result_source)
       VALUES ($1, $2, $3, $4, $5)
-    `, [request.user.id, expression, normalized, Boolean(entry), entry?.source || 'not_found']);
+    `, [request.user.id, expression, normalized, Boolean(entry), historySource]);
 
     return response.json({
       found: Boolean(entry),
