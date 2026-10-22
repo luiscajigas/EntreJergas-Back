@@ -274,7 +274,7 @@ test('proveedor IA valida JSON y usa Gemini con respuestas acotadas por defecto'
 
 test('proveedor IA desactivado sin clave y descarta respuestas incompletas', async () => {
   const disabledProvider = createAiProvider({ apiKey: '' });
-  assert.equal(await disabledProvider('palabra'), null);
+  await assert.rejects(disabledProvider('palabra'), { code: 'AI_NOT_CONFIGURED' });
 
   const invalidProvider = createAiProvider({
     apiKey: 'test-key',
@@ -283,7 +283,26 @@ test('proveedor IA desactivado sin clave y descarta respuestas incompletas', asy
       json: async () => ({ choices: [{ message: { content: '{"meaning":"Solo esto"}' } }] })
     })
   });
-  assert.equal(await invalidProvider('palabra'), null);
+  await assert.rejects(invalidProvider('palabra'), { code: 'AI_INVALID_RESPONSE' });
+});
+
+test('lookup explica cuando falta LLM_API_KEY y no guarda la expresión citada', async () => {
+  const { cookie } = await registerUser();
+  const unavailableServer = createApp(pool, {
+    generateDefinition: createAiProvider({ apiKey: '' })
+  }).listen(0);
+  await new Promise((resolve) => unavailableServer.once('listening', resolve));
+
+  const response = await fetch(`http://127.0.0.1:${unavailableServer.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: '“cachon”' })
+  });
+  const result = await response.json();
+  await new Promise((resolve, reject) => unavailableServer.close((error) => error ? reject(error) : resolve()));
+
+  assert.equal(result.found, false);
+  assert.match(result.message, /LLM_API_KEY/);
 });
 
 test('proveedor IA reintenta ante 503 y completa la definición', async () => {

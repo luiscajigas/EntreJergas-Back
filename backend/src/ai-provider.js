@@ -4,6 +4,13 @@ const definitionFields = ['meaning', 'region', 'context', 'equivalent', 'example
 
 //3
 
+function createAiError(code, message, status) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
 function validateDefinition(value, expression) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
@@ -24,7 +31,11 @@ function createAiProvider({
   waitImplementation = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   randomImplementation = Math.random
 } = {}) {
-  if (!apiKey) return async () => null;
+  if (!apiKey) {
+    return async () => {
+      throw createAiError('AI_NOT_CONFIGURED', 'Falta configurar LLM_API_KEY en el backend.', 503);
+    };
+  }
 
   return async (expression) => {
     let payload;
@@ -96,16 +107,23 @@ function createAiProvider({
     }
 
     const content = payload.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') return null;
+    if (typeof content !== 'string') {
+      throw createAiError('AI_INVALID_RESPONSE', 'Gemini respondió sin contenido de texto.', 502);
+    }
 
     let parsed;
     try {
       parsed = JSON.parse(content);
     } catch {
-      return null;
+      throw createAiError('AI_INVALID_RESPONSE', 'Gemini respondió un JSON inválido.', 502);
     }
 
-    return validateDefinition(parsed, expression);
+    const definition = validateDefinition(parsed, expression);
+    if (!definition) {
+      throw createAiError('AI_INVALID_RESPONSE', 'Gemini no devolvió todos los campos requeridos.', 502);
+    }
+
+    return definition;
   };
 }
 

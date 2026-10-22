@@ -237,6 +237,7 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
     );
     let entry = result.rows[0] ? serializeExpression(result.rows[0]) : null;
     let providerErrorStatus = null;
+    let providerErrorCode = null;
     let providerFailed = false;
     if (!entry) {
       try {
@@ -277,6 +278,7 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
       } catch (error) {
         providerFailed = true;
         providerErrorStatus = error.status || null;
+        providerErrorCode = error.code || null;
         console.error('No se pudo generar una definición con IA:', error.message);
       }
     }
@@ -294,9 +296,13 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
       found: Boolean(entry),
       entry,
       message: entry ? undefined : providerFailed
-        ? providerErrorStatus === 429
-          ? 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.'
-          : `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
+        ? providerErrorCode === 'AI_NOT_CONFIGURED'
+          ? 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.'
+          : providerErrorCode === 'AI_INVALID_RESPONSE'
+            ? 'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.'
+            : providerErrorStatus === 429
+              ? 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.'
+              : `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
         : 'Todavía no tenemos esta expresión en el diccionario.'
     });
   });
