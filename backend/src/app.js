@@ -2,7 +2,7 @@ const cors = require('cors');
 const express = require('express');
 const { createHash, randomBytes, scrypt, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
-const { createAiProvider } = require('./ai-provider');
+const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
 
 const scryptAsync = promisify(scrypt);
 const sessionCookieName = 'entrejergas_session';
@@ -116,7 +116,10 @@ async function createSession(pool, user, response) {
   setSessionCookie(response, token);
 }
 
-function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
+function createApp(pool, {
+  generateDefinition = createAiProvider(),
+  translateDefinition = createAiTranslator()
+} = {}) {
   const app = express();
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
     .split(',')
@@ -305,6 +308,48 @@ function createApp(pool, { generateDefinition = createAiProvider() } = {}) {
               : `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
         : 'Todavía no tenemos esta expresión en el diccionario.'
     });
+  });
+
+  app.post('/api/translate', requireAuthentication, async (request, response) => {
+    const id = Number(request.body?.id);
+    const savedExpression = Number.isSafeInteger(id) && id > 0;
+    let source;
+
+    if (savedExpression) {
+      const cached = await pool.query(`
+        SELECT meaning, region, context, equivalent, example
+        FROM expression_translations
+        WHERE expression_id = $1 AND language = 'en'
+      `, [id]);
+      if (cached.rows[0]) return response.json({ translation: cached.rows[0] });
+
+      source = (await pool.query('SELECT * FROM expressions WHERE id = $1', [id])).rows[0];
+      if (!source) return response.status(404).json({ error: 'La expresión no existe.' });
+    } else {
+      const expression = typeof request.body?.expression === 'string' ? request.body.expression.trim() : '';
+      source = expression && expression.length <= 100 ? validateDefinition(request.body, expression) : null;
+      if (!source) return response.status(400).json({ error: 'La definición a traducir no es válida.' });
+    }
+
+    let translated;
+    try {
+      translated = await translateDefinition(source);
+    } catch (error) {
+      console.error('No se pudo traducir la definición:', error.message);
+      return response.status(502).json({ error: 'No se pudo traducir la definición.' });
+    }
+
+    const { meaning, region, context, equivalent, example } = translated;
+    if (savedExpression) {
+      await pool.query(`
+        INSERT INTO expression_translations
+          (expression_id, language, meaning, region, context, equivalent, example)
+        VALUES ($1, 'en', $2, $3, $4, $5, $6)
+        ON CONFLICT (expression_id, language) DO NOTHING
+      `, [id, meaning, region, context, equivalent, example]);
+    }
+
+    return response.json({ translation: { meaning, region, context, equivalent, example } });
   });
 
   app.get('/api/history', requireAuthentication, async (request, response) => {

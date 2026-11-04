@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
-const { createAiProvider } = require('../src/ai-provider');
+const { createAiProvider, createAiTranslator } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
 
 let pool;
@@ -442,4 +442,105 @@ test('proveedor IA reintenta los timeouts y termina con error 504', async () => 
   });
   assert.equal(calls, 3);
   assert.deepEqual(waits, [1000, 2000]);
+});
+test('translate traduce una expresión guardada una sola vez y luego usa la copia guardada', async () => {
+  const { cookie } = await registerUser();
+  let calls = 0;
+  const translatingServer = createApp(pool, {
+    generateDefinition: async () => null,
+    translateDefinition: async (definition) => {
+      calls += 1;
+      assert.equal(definition.expression, 'parcero');
+      return { expression: definition.expression, meaning: 'A close friend', region: 'Antioquia', context: 'Informal', equivalent: 'buddy', example: 'My parcero helped me.' };
+    }
+  }).listen(0);
+  await new Promise((resolve) => translatingServer.once('listening', resolve));
+  const url = `http://127.0.0.1:${translatingServer.address().port}/api`;
+  const headers = { 'content-type': 'application/json', cookie };
+
+  const lookup = await fetch(`${url}/lookup`, { method: 'POST', headers, body: JSON.stringify({ expression: 'parcero' }) });
+  const { entry } = await lookup.json();
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(`${url}/translate`, { method: 'POST', headers, body: JSON.stringify({ id: entry.id }) });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).translation.meaning, 'A close friend');
+  }
+  assert.equal(calls, 1);
+
+  const stored = await pool.query('SELECT meaning FROM expressions WHERE id = $1', [entry.id]);
+  assert.notEqual(stored.rows[0].meaning, 'A close friend');
+
+  await new Promise((resolve) => translatingServer.close(resolve));
+});
+
+test('translate acepta definiciones temporales, valida los datos y exige sesión', async () => {
+  const { cookie } = await registerUser();
+  let received;
+  const translatingServer = createApp(pool, {
+    generateDefinition: async () => null,
+    translateDefinition: async (definition) => {
+      received = definition;
+      return { ...definition, meaning: 'Translated' };
+    }
+  }).listen(0);
+  await new Promise((resolve) => translatingServer.once('listening', resolve));
+  const url = `http://127.0.0.1:${translatingServer.address().port}/api/translate`;
+  const headers = { 'content-type': 'application/json', cookie };
+  const temporary = { id: null, expression: 'estar tragado', meaning: 'Enamorado', region: 'Colombia', context: 'Informal', equivalent: 'enamorado', example: 'Está tragado.' };
+
+  const translated = await fetch(url, { method: 'POST', headers, body: JSON.stringify(temporary) });
+  assert.equal(translated.status, 200);
+  assert.equal((await translated.json()).translation.meaning, 'Translated');
+  assert.equal(received.expression, 'estar tragado');
+
+  const incomplete = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ expression: 'estar tragado' }) });
+  assert.equal(incomplete.status, 400);
+
+  const missing = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ id: 999999 }) });
+  assert.equal(missing.status, 404);
+
+  const anonymous = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(temporary) });
+  assert.equal(anonymous.status, 401);
+
+  await new Promise((resolve) => translatingServer.close(resolve));
+});
+
+test('translate responde 502 y no guarda nada si la IA falla', async () => {
+  const { cookie } = await registerUser();
+  const failingServer = createApp(pool, {
+    generateDefinition: async () => null,
+    translateDefinition: async () => { throw new Error('UNAVAILABLE'); }
+  }).listen(0);
+  await new Promise((resolve) => failingServer.once('listening', resolve));
+  const row = (await pool.query("SELECT id FROM expressions WHERE normalized_expression = 'tinto'")).rows[0];
+
+  const response = await fetch(`http://127.0.0.1:${failingServer.address().port}/api/translate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ id: Number(row.id) })
+  });
+  assert.equal(response.status, 502);
+  const stored = await pool.query('SELECT 1 FROM expression_translations WHERE expression_id = $1', [row.id]);
+  assert.equal(stored.rows.length, 0);
+
+  await new Promise((resolve) => failingServer.close(resolve));
+});
+
+test('el traductor envía la definición como datos y valida la respuesta', async () => {
+  let body;
+  const translate = createAiTranslator({
+    apiKey: 'test-key',
+    fetchImplementation: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ meaning: 'Friend', region: 'Antioquia', context: 'Informal', equivalent: 'buddy', example: 'My parcero.' }) } }] }) };
+    }
+  });
+  const result = await translate({ expression: 'parcero', meaning: 'Amigo', region: 'Antioquia', context: 'Informal', equivalent: 'amigo', example: 'Mi parcero.' });
+  assert.equal(result.meaning, 'Friend');
+  assert.equal(result.expression, 'parcero');
+  assert.equal(JSON.parse(body.messages[1].content).meaning, 'Amigo');
+  assert.equal(body.max_tokens, 800);
+
+  await assert.rejects(createAiTranslator({ apiKey: '' })({ expression: 'x' }), { code: 'AI_NOT_CONFIGURED' });
 });
