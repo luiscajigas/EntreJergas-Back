@@ -52,8 +52,10 @@ paths:
   /api/lookup:
     post:
       operationId: lookup
-      summary: Busca una expresión en el diccionario y, si no está, la pide a la IA.
-      description: Si la expresión llega completa entre comillas, la definición generada se guarda en el diccionario compartido.
+      summary: Explica una expresión o las expresiones de una frase.
+      description: >
+        Si el texto completo ya está en el diccionario no se consulta la IA. Si no, la IA extrae hasta tres
+        expresiones y las clasifica. Solo se guardan las regionales con confianza alta y al menos un país.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/LookupRequest' } } }
@@ -137,7 +139,7 @@ components:
       type: object
       required: [expression]
       properties:
-        expression: { type: string, minLength: 1 }
+        expression: { type: string, minLength: 1, maxLength: 300 }
     DefinitionText:
       type: object
       required: [meaning, region, context, equivalent, example]
@@ -151,25 +153,53 @@ components:
       allOf:
         - $ref: '#/components/schemas/DefinitionText'
         - type: object
-          required: [id, expression, pronunciation, audioUrl, source]
+          required: [id, expression, pronunciation, audioUrl, source, countries, register]
           properties:
             id: { type: [integer, 'null'], description: Es null si la definición es temporal. }
             expression: { type: string }
             pronunciation: { type: [string, 'null'] }
             audioUrl: { type: [string, 'null'] }
             source: { type: string, enum: [database, ai] }
+            countries:
+              type: array
+              description: Códigos ISO 3166-1 alfa-2 de los países donde se usa. Vacío si no se conocen.
+              items: { type: string, pattern: '^[A-Z]{2}$' }
+            register:
+              description: Nivel de lenguaje. Es null si no se conoce.
+              oneOf:
+                - { type: string, enum: [neutral, informal, vulgar] }
+                - { type: 'null' }
+            classification:
+              type: string
+              enum: [regional, common]
+              description: Solo en definiciones temporales. Una palabra común se explica, pero no se guarda.
     LookupFailureReason:
       type: string
       enum: [not_found, not_configured, invalid_response, quota_exceeded, provider_unavailable, rate_limited]
+    UnresolvedExpression:
+      type: object
+      required: [text, reason, suggestion]
+      properties:
+        text: { type: string }
+        reason: { type: string, enum: [typo, unknown] }
+        suggestion: { type: [string, 'null'], description: Forma correcta si parece un error de escritura. }
     LookupResponse:
       type: object
-      required: [found, entry]
+      required: [found, entry, entries, unresolved]
       properties:
         found: { type: boolean }
         entry:
+          deprecated: true
+          description: Primera definición de entries. Se conserva por compatibilidad.
           oneOf:
             - $ref: '#/components/schemas/ExpressionEntry'
             - type: 'null'
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/ExpressionEntry' }
+        unresolved:
+          type: array
+          items: { $ref: '#/components/schemas/UnresolvedExpression' }
         reason: { $ref: '#/components/schemas/LookupFailureReason' }
         message: { type: string, description: Explicación en español para quien consume la API. }
     TranslateRequest:
@@ -214,12 +244,21 @@ components:
       properties:
         region: { type: string }
         count: { type: integer }
+    CountryCount:
+      type: object
+      required: [country, count]
+      properties:
+        country: { type: string, pattern: '^[A-Z]{2}$' }
+        count: { type: integer }
     DashboardResponse:
       type: object
-      required: [expressions, searches, regions]
+      required: [expressions, searches, regions, countries]
       properties:
         expressions: { type: integer }
         searches: { type: integer }
         regions:
           type: array
           items: { $ref: '#/components/schemas/RegionCount' }
+        countries:
+          type: array
+          items: { $ref: '#/components/schemas/CountryCount' }

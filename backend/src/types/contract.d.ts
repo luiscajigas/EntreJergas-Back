@@ -99,8 +99,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Busca una expresión en el diccionario y, si no está, la pide a la IA.
-         * @description Si la expresión llega completa entre comillas, la definición generada se guarda en el diccionario compartido.
+         * Explica una expresión o las expresiones de una frase.
+         * @description Si el texto completo ya está en el diccionario no se consulta la IA. Si no, la IA extrae hasta tres expresiones y las clasifica. Solo se guardan las regionales con confianza alta y al menos un país.
          */
         post: operations["lookup"];
         delete?: never;
@@ -213,12 +213,34 @@ export interface components {
             audioUrl: string | null;
             /** @enum {string} */
             source: "database" | "ai";
+            /** @description Códigos ISO 3166-1 alfa-2 de los países donde se usa. Vacío si no se conocen. */
+            countries: string[];
+            /** @description Nivel de lenguaje. Es null si no se conoce. */
+            register: ("neutral" | "informal" | "vulgar") | null;
+            /**
+             * @description Solo en definiciones temporales. Una palabra común se explica, pero no se guarda.
+             * @enum {string}
+             */
+            classification?: "regional" | "common";
         };
         /** @enum {string} */
         LookupFailureReason: "not_found" | "not_configured" | "invalid_response" | "quota_exceeded" | "provider_unavailable" | "rate_limited";
+        UnresolvedExpression: {
+            text: string;
+            /** @enum {string} */
+            reason: "typo" | "unknown";
+            /** @description Forma correcta si parece un error de escritura. */
+            suggestion: string | null;
+        };
         LookupResponse: {
             found: boolean;
+            /**
+             * @deprecated
+             * @description Primera definición de entries. Se conserva por compatibilidad.
+             */
             entry: components["schemas"]["ExpressionEntry"] | null;
+            entries: components["schemas"]["ExpressionEntry"][];
+            unresolved: components["schemas"]["UnresolvedExpression"][];
             reason?: components["schemas"]["LookupFailureReason"];
             /** @description Explicación en español para quien consume la API. */
             message?: string;
@@ -248,10 +270,15 @@ export interface components {
             region: string;
             count: number;
         };
+        CountryCount: {
+            country: string;
+            count: number;
+        };
         DashboardResponse: {
             expressions: number;
             searches: number;
             regions: components["schemas"]["RegionCount"][];
+            countries: components["schemas"]["CountryCount"][];
         };
     };
     responses: {
