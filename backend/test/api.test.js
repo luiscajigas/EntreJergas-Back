@@ -554,3 +554,25 @@ test('un JSON inválido o demasiado grande responde como error del cliente', asy
   const tooLarge = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST', headers, body: JSON.stringify({ email: 'x'.repeat(20000) }) });
   assert.equal(tooLarge.status, 413);
 });
+
+test('lookup indica con un código el motivo por el que no hay definición', async () => {
+  const { cookie } = await registerUser();
+  const failures = [
+    [Object.assign(new Error('x'), { code: 'AI_NOT_CONFIGURED' }), 'not_configured'],
+    [Object.assign(new Error('x'), { code: 'AI_INVALID_RESPONSE' }), 'invalid_response'],
+    [Object.assign(new Error('x'), { status: 429 }), 'quota_exceeded'],
+    [Object.assign(new Error('x'), { status: 503 }), 'provider_unavailable']
+  ];
+
+  for (const [failure, reason] of failures) {
+    const failingServer = createApp(pool, { generateDefinition: async () => { throw failure; } }).listen(0);
+    await new Promise((resolve) => failingServer.once('listening', resolve));
+    const response = await fetch(`http://127.0.0.1:${failingServer.address().port}/api/lookup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ expression: 'palabra sin definicion' })
+    });
+    assert.equal((await response.json()).reason, reason);
+    await new Promise((resolve) => failingServer.close(resolve));
+  }
+});

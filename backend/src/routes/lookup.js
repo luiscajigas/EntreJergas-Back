@@ -3,16 +3,16 @@ const { normalizeExpression, parseQuotedExpression } = require('../expression-te
 
 function describeFailure(error) {
   if (error.code === 'AI_NOT_CONFIGURED') {
-    return 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.';
+    return { reason: 'not_configured', message: 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.' };
   }
   if (error.code === 'AI_INVALID_RESPONSE') {
-    return 'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.';
+    return { reason: 'invalid_response', message: 'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.' };
   }
   if (error.status === 429) {
-    return 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.';
+    return { reason: 'quota_exceeded', message: 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.' };
   }
   const detail = error.status ? ` (error ${error.status})` : '';
-  return `Gemini no pudo responder${detail}. La expresión no se agregó; inténtalo de nuevo más tarde.`;
+  return { reason: 'provider_unavailable', message: `Gemini no pudo responder${detail}. La expresión no se agregó; inténtalo de nuevo más tarde.` };
 }
 
 function historySource(entry) {
@@ -41,15 +41,15 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, re
 
     const normalized = normalizeExpression(expression);
     let entry = await expressions.findByNormalized(normalized);
-    let message;
+    let failure;
 
     if (!entry) {
       try {
         entry = await generateEntry({ expression, normalized, explicitlySave });
-        if (!entry) message = 'Todavía no tenemos esta expresión en el diccionario.';
+        if (!entry) failure = { reason: 'not_found', message: 'Todavía no tenemos esta expresión en el diccionario.' };
       } catch (error) {
         console.error('No se pudo generar una definición con IA:', error.message);
-        message = describeFailure(error);
+        failure = describeFailure(error);
       }
     }
 
@@ -61,7 +61,7 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, re
       source: historySource(entry)
     });
 
-    response.json({ found: Boolean(entry), entry, message });
+    response.json({ found: Boolean(entry), entry, ...failure });
   });
 
   return router;
