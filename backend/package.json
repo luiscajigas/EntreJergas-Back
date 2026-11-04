@@ -18,7 +18,15 @@
     "pg": "^8.16.3"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "nodemon": "^3.1.10",
     "pg-mem": "^3.0.5",
-    "nodemon": "^3.1.10"
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.1"
   }
 }
