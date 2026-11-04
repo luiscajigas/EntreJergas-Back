@@ -3,35 +3,11 @@ const express = require('express');
 const { createHash, randomBytes, scrypt, timingSafeEqual } = require('node:crypto');
 const { promisify } = require('node:util');
 const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
+const { normalizeExpression, parseQuotedExpression } = require('./expression-text');
 
 const scryptAsync = promisify(scrypt);
 const sessionCookieName = 'entrejergas_session';
 const sessionDurationMs = 7 * 24 * 60 * 60 * 1000;
-
-function normalizeExpression(value) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es')
-    .replace(/[¿?¡!.,;:]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function parseQuotedExpression(value) {
-  const text = value.trim();
-  const quotePairs = { '"': '"', "'": "'", '“': '”', '‘': '’', '«': '»' };
-  const closingQuote = quotePairs[text[0]];
-
-  if (text.length < 2 || !closingQuote || !text.endsWith(closingQuote)) {
-    return { expression: text, explicitlySave: false };
-  }
-
-  return {
-    expression: text.slice(1, -1).trim(),
-    explicitlySave: true
-  };
-}
 
 function serializeExpression(row) {
   return {
