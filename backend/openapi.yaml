@@ -110,6 +110,7 @@ components:
       properties:
         status: { type: string }
         service: { type: string }
+        version: { type: string, description: Commit desplegado, si la plataforma lo informa. }
     User:
       type: object
       required: [id, email, name]

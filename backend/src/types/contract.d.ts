@@ -175,6 +175,8 @@ export interface components {
         HealthResponse: {
             status: string;
             service: string;
+            /** @description Commit desplegado */
+            version?: string;
         };
         User: {
             id: number;

@@ -48,7 +48,8 @@ function createApp(pool, {
 
   app.get('/api/health', async (_request, response) => {
     await pool.query('SELECT 1');
-    reply(response, 'HealthResponse', { status: 'ok', service: 'entrejergas-api' });
+    const version = process.env.RENDER_GIT_COMMIT?.slice(0, 7);
+    reply(response, 'HealthResponse', { status: 'ok', service: 'entrejergas-api', ...(version ? { version } : {}) });
   });
 
   app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, loginLimiter, requireAuthentication }));
