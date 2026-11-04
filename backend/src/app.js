@@ -3,24 +3,11 @@ const express = require('express');
 const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
 const { createRequireAuthentication } = require('./auth/require-authentication');
 const { createSessionStore } = require('./auth/sessions');
+const { createExpressionRepository } = require('./repositories/expressions');
+const { createSearchHistoryRepository } = require('./repositories/search-history');
 const { createUserRepository } = require('./repositories/users');
 const { createAuthRouter } = require('./routes/auth');
-const { normalizeExpression, parseQuotedExpression } = require('./expression-text');
-
-function serializeExpression(row) {
-  return {
-    id: Number(row.id),
-    expression: row.expression,
-    meaning: row.meaning,
-    region: row.region,
-    context: row.context,
-    equivalent: row.equivalent,
-    example: row.example,
-    pronunciation: row.pronunciation,
-    audioUrl: row.audio_url,
-    source: row.source === 'ai' ? 'ai' : 'database'
-  };
-}
+const { createLookupRouter } = require('./routes/lookup');
 
 function createApp(pool, {
   generateDefinition = createAiProvider(),
@@ -44,94 +31,9 @@ function createApp(pool, {
 
   app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, requireAuthentication }));
 
-  app.post('/api/lookup', requireAuthentication, async (request, response) => {
-    const rawExpression = typeof request.body?.expression === 'string'
-      ? request.body.expression
-      : '';
-    const { expression, explicitlySave } = parseQuotedExpression(rawExpression);
-
-    if (!expression || expression.length > 100) {
-      return response.status(400).json({
-        error: 'La expresión debe tener entre 1 y 100 caracteres.'
-      });
-    }
-
-    const normalized = normalizeExpression(expression);
-    const result = await pool.query(
-      'SELECT * FROM expressions WHERE normalized_expression = $1',
-      [normalized]
-    );
-    let entry = result.rows[0] ? serializeExpression(result.rows[0]) : null;
-    let providerErrorStatus = null;
-    let providerErrorCode = null;
-    let providerFailed = false;
-    if (!entry) {
-      try {
-        const definition = await generateDefinition(expression);
-        if (definition) {
-          if (explicitlySave) {
-            const inserted = await pool.query(`
-              INSERT INTO expressions (
-                normalized_expression, expression, meaning, region, context,
-                equivalent, example, source
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai')
-              ON CONFLICT (normalized_expression) DO NOTHING
-              RETURNING *
-            `, [
-              normalized,
-              definition.expression,
-              definition.meaning,
-              definition.region,
-              definition.context,
-              definition.equivalent,
-              definition.example
-            ]);
-            const saved = inserted.rows[0] || (await pool.query(
-              'SELECT * FROM expressions WHERE normalized_expression = $1',
-              [normalized]
-            )).rows[0];
-            entry = serializeExpression(saved);
-          } else {
-            entry = {
-              id: null,
-              ...definition,
-              pronunciation: null,
-              audioUrl: null,
-              source: 'ai'
-            };
-          }
-        }
-      } catch (error) {
-        providerFailed = true;
-        providerErrorStatus = error.status || null;
-        providerErrorCode = error.code || null;
-        console.error('No se pudo generar una definición con IA:', error.message);
-      }
-    }
-
-    const historySource = entry?.source === 'ai' && entry.id !== null
-      ? 'ai_saved'
-      : entry?.source || 'not_found';
-    await pool.query(`
-      INSERT INTO search_history
-        (user_id, searched_expression, normalized_expression, found, result_source)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [request.user.id, expression, normalized, Boolean(entry), historySource]);
-
-    return response.json({
-      found: Boolean(entry),
-      entry,
-      message: entry ? undefined : providerFailed
-        ? providerErrorCode === 'AI_NOT_CONFIGURED'
-          ? 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.'
-          : providerErrorCode === 'AI_INVALID_RESPONSE'
-            ? 'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.'
-            : providerErrorStatus === 429
-              ? 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.'
-              : `Gemini no pudo responder${providerErrorStatus ? ` (error ${providerErrorStatus})` : ''}. La expresión no se agregó; inténtalo de nuevo más tarde.`
-        : 'Todavía no tenemos esta expresión en el diccionario.'
-    });
-  });
+  const expressions = createExpressionRepository(pool);
+  const searchHistory = createSearchHistoryRepository(pool);
+  app.use('/api', createLookupRouter({ expressions, searchHistory, generateDefinition, requireAuthentication }));
 
   app.post('/api/translate', requireAuthentication, async (request, response) => {
     const id = Number(request.body?.id);
