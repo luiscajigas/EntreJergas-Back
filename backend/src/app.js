@@ -3,9 +3,11 @@ const express = require('express');
 const { createAiProvider, createAiTranslator } = require('./ai-provider');
 const { createRequireAuthentication } = require('./auth/require-authentication');
 const { createSessionStore } = require('./auth/sessions');
+const { errorHandler } = require('./error-handler');
 const { createExpressionRepository } = require('./repositories/expressions');
 const { createSearchHistoryRepository } = require('./repositories/search-history');
 const { createUserRepository } = require('./repositories/users');
+const { createActivityRouter } = require('./routes/activity');
 const { createAuthRouter } = require('./routes/auth');
 const { createLookupRouter } = require('./routes/lookup');
 const { createTranslateRouter } = require('./routes/translate');
@@ -38,46 +40,9 @@ function createApp(pool, {
 
   app.use('/api', createTranslateRouter({ expressions, translateDefinition, requireAuthentication }));
 
-  app.get('/api/history', requireAuthentication, async (request, response) => {
-    const result = await pool.query(`
-      SELECT id, searched_expression AS expression, found, result_source AS source,
-        created_at AS "createdAt"
-      FROM search_history
-      WHERE user_id = $1
-      ORDER BY id DESC
-      LIMIT 30
-    `, [request.user.id]);
+  app.use('/api', createActivityRouter({ expressions, searchHistory, requireAuthentication }));
 
-    response.json({ items: result.rows.map((row) => ({ ...row, id: Number(row.id) })) });
-  });
-
-  app.get('/api/dashboard', requireAuthentication, async (request, response) => {
-    const [expressionsResult, searchesResult, regionsResult] = await Promise.all([
-      pool.query('SELECT COUNT(*)::int AS count FROM expressions'),
-      pool.query('SELECT COUNT(*)::int AS count FROM search_history WHERE user_id = $1', [request.user.id]),
-      pool.query(`
-        SELECT region, COUNT(*)::int AS count
-        FROM expressions
-        GROUP BY region
-        ORDER BY count DESC, region ASC
-      `)
-    ]);
-
-    response.json({
-      expressions: expressionsResult.rows[0].count,
-      searches: searchesResult.rows[0].count,
-      regions: regionsResult.rows
-    });
-  });
-
-  app.use((error, _request, response, _next) => {
-    if (error.status >= 400 && error.status < 500) {
-      response.status(error.status).json({ error: 'La solicitud no es válida.' });
-      return;
-    }
-    console.error(error);
-    response.status(500).json({ error: 'Ocurrió un error inesperado en el servidor.' });
-  });
+  app.use(errorHandler);
 
   return app;
 }
