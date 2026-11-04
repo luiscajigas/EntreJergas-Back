@@ -15,6 +15,7 @@ pool.on('error', (error) => {
   console.error('Error inesperado en una conexión PostgreSQL inactiva:', error);
 });
 
+/** @param {Pick<import('pg').Pool, 'connect'>} [databasePool] */
 async function initializeDatabase(databasePool = pool) {
   if (databasePool === pool && !process.env.DATABASE_URL) {
     throw new Error('Falta DATABASE_URL. Configura la URL de PostgreSQL en el entorno del backend.');

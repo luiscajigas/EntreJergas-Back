@@ -1,3 +1,9 @@
+/** @typedef {import('../types/app').Schemas} Schemas */
+
+/**
+ * @param {any} row
+ * @returns {Schemas['ExpressionEntry']}
+ */
 function serializeExpression(row) {
   return {
     id: Number(row.id),
@@ -13,7 +19,9 @@ function serializeExpression(row) {
   };
 }
 
+/** @param {import('pg').Pool} pool */
 function createExpressionRepository(pool) {
+  /** @param {string} normalized */
   const findByNormalized = async (normalized) => {
     const result = await pool.query('SELECT * FROM expressions WHERE normalized_expression = $1', [normalized]);
     return result.rows[0] ? serializeExpression(result.rows[0]) : null;
@@ -22,11 +30,16 @@ function createExpressionRepository(pool) {
   return {
     findByNormalized,
 
+    /** @param {number} id */
     async findById(id) {
       const result = await pool.query('SELECT * FROM expressions WHERE id = $1', [id]);
       return result.rows[0] ? serializeExpression(result.rows[0]) : null;
     },
 
+    /**
+     * @param {string} normalized
+     * @param {import('../types/app').Definition} definition
+     */
     async saveGenerated(normalized, definition) {
       const inserted = await pool.query(`
         INSERT INTO expressions (
@@ -47,6 +60,10 @@ function createExpressionRepository(pool) {
       return inserted.rows[0] ? serializeExpression(inserted.rows[0]) : findByNormalized(normalized);
     },
 
+    /**
+     * @param {number} expressionId
+     * @returns {Promise<Schemas['DefinitionText'] | null>}
+     */
     async findTranslation(expressionId) {
       const result = await pool.query(`
         SELECT meaning, region, context, equivalent, example
@@ -56,6 +73,10 @@ function createExpressionRepository(pool) {
       return result.rows[0] ?? null;
     },
 
+    /**
+     * @param {number} expressionId
+     * @param {Schemas['DefinitionText']} translation
+     */
     async saveTranslation(expressionId, { meaning, region, context, equivalent, example }) {
       await pool.query(`
         INSERT INTO expression_translations
@@ -65,11 +86,13 @@ function createExpressionRepository(pool) {
       `, [expressionId, meaning, region, context, equivalent, example]);
     },
 
+    /** @returns {Promise<number>} */
     async count() {
       const result = await pool.query('SELECT COUNT(*)::int AS count FROM expressions');
       return result.rows[0].count;
     },
 
+    /** @returns {Promise<Schemas['RegionCount'][]>} */
     async countByRegion() {
       const result = await pool.query(`
         SELECT region, COUNT(*)::int AS count
