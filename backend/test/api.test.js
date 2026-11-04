@@ -4,6 +4,7 @@ const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
 const { createAiProvider, createAiTranslator } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
+const { createRateLimiter } = require('../src/rate-limiter');
 
 let pool;
 let server;
@@ -575,4 +576,43 @@ test('lookup indica con un código el motivo por el que no hay definición', asy
     assert.equal((await response.json()).reason, reason);
     await new Promise((resolve) => failingServer.close(resolve));
   }
+});
+
+test('el limitador cuenta por clave y se reinicia al terminar la ventana', () => {
+  let time = 0;
+  const limiter = createRateLimiter({ max: 2, windowMs: 100, now: () => time });
+  assert.equal(limiter.tryConsume('ana'), true);
+  assert.equal(limiter.tryConsume('ana'), true);
+  assert.equal(limiter.tryConsume('ana'), false);
+  assert.equal(limiter.tryConsume('luis'), true);
+  time = 101;
+  assert.equal(limiter.tryConsume('ana'), true);
+  limiter.tryConsume('ana');
+  limiter.reset('ana');
+  assert.equal(limiter.isLimited('ana'), false);
+});
+
+test('la IA tiene un límite por cuenta que no afecta las palabras del diccionario', async () => {
+  const { cookie } = await registerUser();
+  let calls = 0;
+  const limitedServer = createApp(pool, {
+    generateDefinition: async () => { calls += 1; return null; },
+    translateDefinition: async () => { throw new Error('no debería llamarse'); },
+    aiLimiter: createRateLimiter({ max: 1, windowMs: 60000 })
+  }).listen(0);
+  await new Promise((resolve) => limitedServer.once('listening', resolve));
+  const url = `http://127.0.0.1:${limitedServer.address().port}/api`;
+  const headers = { 'content-type': 'application/json', cookie };
+  const lookup = async (expression) => (await fetch(`${url}/lookup`, { method: 'POST', headers, body: JSON.stringify({ expression }) })).json();
+
+  assert.equal((await lookup('primera nueva')).reason, 'not_found');
+  assert.equal((await lookup('segunda nueva')).reason, 'rate_limited');
+  assert.equal(calls, 1);
+  assert.equal((await lookup('parcero')).found, true);
+
+  const translation = await fetch(`${url}/translate`, { method: 'POST', headers, body: JSON.stringify({ expression: 'x', meaning: 'a', region: 'b', context: 'c', equivalent: 'd', example: 'e' }) });
+  assert.equal(translation.status, 429);
+  assert.equal((await translation.json()).code, 'rate_limited');
+
+  await new Promise((resolve) => limitedServer.close(resolve));
 });

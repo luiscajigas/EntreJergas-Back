@@ -20,7 +20,7 @@ function historySource(entry) {
   return entry.source === 'ai' && entry.id !== null ? 'ai_saved' : entry.source;
 }
 
-function createLookupRouter({ expressions, searchHistory, generateDefinition, requireAuthentication }) {
+function createLookupRouter({ expressions, searchHistory, generateDefinition, aiLimiter, requireAuthentication }) {
   const router = express.Router();
 
   const generateEntry = async ({ expression, normalized, explicitlySave }) => {
@@ -43,7 +43,9 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, re
     let entry = await expressions.findByNormalized(normalized);
     let failure;
 
-    if (!entry) {
+    if (!entry && !aiLimiter.tryConsume(request.user.id)) {
+      failure = { reason: 'rate_limited', message: 'Hiciste muchas búsquedas nuevas seguidas. Espera un minuto; la expresión no se agregó.' };
+    } else if (!entry) {
       try {
         entry = await generateEntry({ expression, normalized, explicitlySave });
         if (!entry) failure = { reason: 'not_found', message: 'Todavía no tenemos esta expresión en el diccionario.' };

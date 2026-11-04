@@ -5,7 +5,7 @@ function pickTranslation({ meaning, region, context, equivalent, example }) {
   return { meaning, region, context, equivalent, example };
 }
 
-function createTranslateRouter({ expressions, translateDefinition, requireAuthentication }) {
+function createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication }) {
   const router = express.Router();
 
   const readTemporaryDefinition = (body) => {
@@ -35,6 +35,11 @@ function createTranslateRouter({ expressions, translateDefinition, requireAuthen
         response.status(400).json({ error: 'La definición a traducir no es válida.' });
         return;
       }
+    }
+
+    if (!aiLimiter.tryConsume(request.user.id)) {
+      response.status(429).json({ error: 'Hiciste muchas traducciones seguidas. Espera un minuto.', code: 'rate_limited' });
+      return;
     }
 
     let translation;
