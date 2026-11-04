@@ -3,10 +3,12 @@ const { createHash, randomBytes } = require('node:crypto');
 const cookieName = 'entrejergas_session';
 const sessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 
+/** @param {string} token */
 function hashToken(token) {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** @param {import('express').Request} request */
 function readToken(request) {
   const header = request.headers.cookie || '';
   const cookie = header.split(';').map((value) => value.trim())
@@ -14,11 +16,19 @@ function readToken(request) {
   return cookie ? cookie.slice(cookieName.length + 1) : null;
 }
 
+/**
+ * @param {import('express').Response} response
+ * @param {string[]} attributes
+ */
 function writeCookie(response, attributes) {
   if (process.env.NODE_ENV === 'production') attributes.push('Secure');
   response.setHeader('Set-Cookie', attributes.join('; '));
 }
 
+/**
+ * @param {import('express').Response} response
+ * @param {string} token
+ */
 function setSessionCookie(response, token) {
   writeCookie(response, [
     `${cookieName}=${token}`,
@@ -29,6 +39,7 @@ function setSessionCookie(response, token) {
   ]);
 }
 
+/** @param {import('express').Response} response */
 function clearSessionCookie(response) {
   writeCookie(response, [
     `${cookieName}=`,
@@ -40,8 +51,13 @@ function clearSessionCookie(response) {
   ]);
 }
 
+/** @param {import('pg').Pool} pool */
 function createSessionStore(pool) {
   return {
+    /**
+     * @param {number} userId
+     * @param {import('express').Response} response
+     */
     async start(userId, response) {
       const token = randomBytes(32).toString('base64url');
       const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString();
@@ -55,6 +71,10 @@ function createSessionStore(pool) {
       setSessionCookie(response, token);
     },
 
+    /**
+     * @param {string} token
+     * @returns {Promise<import('../types/app').Schemas['User'] | null>}
+     */
     async findUser(token) {
       const result = await pool.query(`
         SELECT users.id, users.email, users.display_name AS name
@@ -63,9 +83,11 @@ function createSessionStore(pool) {
         WHERE user_sessions.token_hash = $1
           AND user_sessions.expires_at > NOW()
       `, [hashToken(token)]);
-      return result.rows[0] ?? null;
+      const row = result.rows[0];
+      return row ? { id: Number(row.id), email: row.email, name: row.name } : null;
     },
 
+    /** @param {string} token */
     async end(token) {
       await pool.query('DELETE FROM user_sessions WHERE token_hash = $1', [hashToken(token)]);
     }

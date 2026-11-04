@@ -1,3 +1,4 @@
+/** @param {string} value */
 function normalizeExpression(value) {
   return value
     .normalize('NFD')
@@ -8,8 +9,10 @@ function normalizeExpression(value) {
     .trim();
 }
 
+/** @param {string} value */
 function parseQuotedExpression(value) {
   const text = value.trim();
+  /** @type {Record<string, string>} */
   const quotePairs = { '"': '"', "'": "'", '“': '”', '‘': '’', '«': '»' };
   const closingQuote = quotePairs[text[0]];
 
