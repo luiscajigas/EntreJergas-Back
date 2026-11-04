@@ -616,3 +616,21 @@ test('la IA tiene un límite por cuenta que no afecta las palabras del diccionar
 
   await new Promise((resolve) => limitedServer.close(resolve));
 });
+
+test('el ingreso se bloquea tras varios intentos fallidos y un acierto reinicia la cuenta', async () => {
+  const limitedServer = createApp(pool, { loginLimiter: createRateLimiter({ max: 2, windowMs: 60000 }) }).listen(0);
+  await new Promise((resolve) => limitedServer.once('listening', resolve));
+  const url = `http://127.0.0.1:${limitedServer.address().port}/api/auth`;
+  const headers = { 'content-type': 'application/json' };
+  const email = 'bloqueo@example.com';
+  await fetch(`${url}/register`, { method: 'POST', headers, body: JSON.stringify({ name: 'Ana', email, password: 'password123' }) });
+  const login = (password) => fetch(`${url}/login`, { method: 'POST', headers, body: JSON.stringify({ email, password }) });
+
+  assert.equal((await login('incorrecta')).status, 401);
+  assert.equal((await login('password123')).status, 200);
+  assert.equal((await login('incorrecta')).status, 401);
+  assert.equal((await login('incorrecta')).status, 401);
+  assert.equal((await login('password123')).status, 429);
+
+  await new Promise((resolve) => limitedServer.close(resolve));
+});

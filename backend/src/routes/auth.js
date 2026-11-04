@@ -13,7 +13,7 @@ function validateRegistration({ name, email, password }) {
   return null;
 }
 
-function createAuthRouter({ users, sessions, requireAuthentication }) {
+function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication }) {
   const router = express.Router();
 
   router.post('/register', async (request, response) => {
@@ -44,12 +44,19 @@ function createAuthRouter({ users, sessions, requireAuthentication }) {
     const email = readText(request.body?.email).trim().toLowerCase();
     const password = readText(request.body?.password);
 
+    if (loginLimiter.isLimited(email)) {
+      response.status(429).json({ error: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.', code: 'rate_limited' });
+      return;
+    }
+
     const credentials = await users.findCredentials(email);
     if (!credentials || !await verifyPassword(password, credentials.passwordHash)) {
+      loginLimiter.record(email);
       response.status(401).json({ error: 'Correo o contraseña incorrectos.' });
       return;
     }
 
+    loginLimiter.reset(email);
     await sessions.start(credentials.user.id, response);
     response.json({ user: credentials.user });
   });

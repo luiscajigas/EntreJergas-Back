@@ -35,7 +35,7 @@ function createApp(pool, {
     response.json({ status: 'ok', service: 'entrejergas-api' });
   });
 
-  app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, requireAuthentication }));
+  app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, loginLimiter, requireAuthentication }));
 
   const expressions = createExpressionRepository(pool);
   const searchHistory = createSearchHistoryRepository(pool);
