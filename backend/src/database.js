@@ -94,6 +94,18 @@ async function initializeDatabase(databasePool = pool) {
       SET result_source = CASE WHEN found THEN 'database' ELSE 'not_found' END
       WHERE result_source = 'not_found' AND found = TRUE;
 
+      CREATE TABLE IF NOT EXISTS expression_translations (
+        expression_id BIGINT NOT NULL REFERENCES expressions(id) ON DELETE CASCADE,
+        language TEXT NOT NULL,
+        meaning TEXT NOT NULL,
+        region TEXT NOT NULL,
+        context TEXT NOT NULL,
+        equivalent TEXT NOT NULL,
+        example TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (expression_id, language)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id
         ON user_sessions(user_id);
 
