@@ -9,21 +9,16 @@ function normalizeExpression(value) {
     .trim();
 }
 
-/** @param {string} value */
-function parseQuotedExpression(value) {
+/**
+ * Quita las comillas que envuelven todo el texto.
+ * @param {string} value
+ */
+function stripWrappingQuotes(value) {
   const text = value.trim();
   /** @type {Record<string, string>} */
   const quotePairs = { '"': '"', "'": "'", '“': '”', '‘': '’', '«': '»' };
   const closingQuote = quotePairs[text[0]];
-
-  if (text.length < 2 || !closingQuote || !text.endsWith(closingQuote)) {
-    return { expression: text, explicitlySave: false };
-  }
-
-  return {
-    expression: text.slice(1, -1).trim(),
-    explicitlySave: true
-  };
+  return text.length >= 2 && closingQuote && text.endsWith(closingQuote) ? text.slice(1, -1).trim() : text;
 }
 
-module.exports = { normalizeExpression, parseQuotedExpression };
+module.exports = { normalizeExpression, stripWrappingQuotes };
