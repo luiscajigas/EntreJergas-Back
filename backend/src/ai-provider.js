@@ -1,3 +1,4 @@
+const defaultModel = 'gemini-3.5-flash-lite';
 const defaultEndpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 const definitionFields = ['meaning', 'region', 'context', 'equivalent', 'example'];
@@ -30,7 +31,7 @@ function validateDefinition(value, expression) {
 function createJsonClient({
   apiKey = process.env.LLM_API_KEY,
   endpoint = process.env.LLM_API_URL || defaultEndpoint,
-  model = process.env.LLM_MODEL || 'gemini-3.8-flash',
+  model = process.env.LLM_MODEL || defaultModel,
   fetchImplementation = fetch,
   waitImplementation = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   randomImplementation = Math.random

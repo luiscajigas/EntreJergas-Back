@@ -266,7 +266,7 @@ test('proveedor IA valida JSON y usa Gemini con respuestas acotadas por defecto'
 
   const definition = await generateDefinition('palabra nueva');
   assert.equal(requestedUrl, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
-  assert.equal(requestedBody.model, 'gemini-3.8-flash');
+  assert.equal(requestedBody.model, 'gemini-3.5-flash-lite');
   assert.equal(requestedBody.max_tokens, 400);
   assert.equal(definition.expression, 'palabra nueva');
   assert.equal(definition.meaning, 'Significado');
