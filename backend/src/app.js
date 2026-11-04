@@ -1,11 +1,10 @@
 const cors = require('cors');
 const express = require('express');
-const { createHash, randomBytes, scrypt, timingSafeEqual } = require('node:crypto');
-const { promisify } = require('node:util');
+const { createHash, randomBytes } = require('node:crypto');
 const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
+const { hashPassword, verifyPassword } = require('./auth/passwords');
 const { normalizeExpression, parseQuotedExpression } = require('./expression-text');
 
-const scryptAsync = promisify(scrypt);
 const sessionCookieName = 'entrejergas_session';
 const sessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 
@@ -58,21 +57,6 @@ function clearSessionCookie(response) {
   ];
   if (process.env.NODE_ENV === 'production') attributes.push('Secure');
   response.setHeader('Set-Cookie', attributes.join('; '));
-}
-
-async function hashPassword(password) {
-  const salt = randomBytes(16).toString('hex');
-  const derivedKey = await scryptAsync(password, salt, 64);
-  return `scrypt:${salt}:${derivedKey.toString('hex')}`;
-}
-
-async function verifyPassword(password, storedHash) {
-  const [algorithm, salt, expectedHex] = storedHash.split(':');
-  if (algorithm !== 'scrypt' || !salt || !expectedHex) return false;
-
-  const expected = Buffer.from(expectedHex, 'hex');
-  const actual = await scryptAsync(password, salt, expected.length);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 function serializeUser(user) {
