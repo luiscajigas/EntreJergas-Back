@@ -15,7 +15,9 @@ function serializeExpression(row) {
     example: row.example,
     pronunciation: row.pronunciation,
     audioUrl: row.audio_url,
-    source: row.source === 'ai' ? 'ai' : 'database'
+    source: row.source === 'ai' ? 'ai' : 'database',
+    countries: Array.isArray(row.countries) ? row.countries : [],
+    register: row.language_register ?? null
   };
 }
 
@@ -30,6 +32,12 @@ function createExpressionRepository(pool) {
   return {
     findByNormalized,
 
+    /** @returns {Promise<{ normalized: string, expression: string }[]>} */
+    async listNames() {
+      const result = await pool.query('SELECT normalized_expression AS normalized, expression FROM expressions');
+      return result.rows;
+    },
+
     /** @param {number} id */
     async findById(id) {
       const result = await pool.query('SELECT * FROM expressions WHERE id = $1', [id]);
@@ -39,13 +47,14 @@ function createExpressionRepository(pool) {
     /**
      * @param {string} normalized
      * @param {import('../types/app').Definition} definition
+     * @param {{ countries: string[], register: Schemas['ExpressionEntry']['register'] }} details
      */
-    async saveGenerated(normalized, definition) {
+    async saveGenerated(normalized, definition, { countries, register }) {
       const inserted = await pool.query(`
         INSERT INTO expressions (
           normalized_expression, expression, meaning, region, context,
-          equivalent, example, source
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai')
+          equivalent, example, source, countries, language_register
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai', $8, $9)
         ON CONFLICT (normalized_expression) DO NOTHING
         RETURNING *
       `, [
@@ -55,7 +64,9 @@ function createExpressionRepository(pool) {
         definition.region,
         definition.context,
         definition.equivalent,
-        definition.example
+        definition.example,
+        countries,
+        register
       ]);
       return inserted.rows[0] ? serializeExpression(inserted.rows[0]) : findByNormalized(normalized);
     },
@@ -90,6 +101,21 @@ function createExpressionRepository(pool) {
     async count() {
       const result = await pool.query('SELECT COUNT(*)::int AS count FROM expressions');
       return result.rows[0].count;
+    },
+
+    /** @returns {Promise<Schemas['CountryCount'][]>} */
+    async countByCountry() {
+      const result = await pool.query('SELECT countries FROM expressions');
+      /** @type {Map<string, number>} */
+      const counts = new Map();
+      for (const { countries } of result.rows) {
+        for (const country of Array.isArray(countries) ? countries : []) {
+          counts.set(country, (counts.get(country) ?? 0) + 1);
+        }
+      }
+      return [...counts]
+        .map(([country, count]) => ({ country, count }))
+        .sort((left, right) => right.count - left.count || left.country.localeCompare(right.country));
     },
 
     /** @returns {Promise<Schemas['RegionCount'][]>} */
