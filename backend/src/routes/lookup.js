@@ -1,6 +1,14 @@
 const express = require('express');
 const { normalizeExpression, parseQuotedExpression } = require('../expression-text');
+const { reply, replyError } = require('../http-reply');
 
+/** @typedef {import('../types/app').Schemas} Schemas */
+/** @typedef {{ reason: Schemas['LookupFailureReason'], message: string }} LookupFailure */
+
+/**
+ * @param {{ code?: string, status?: number }} error
+ * @returns {LookupFailure}
+ */
 function describeFailure(error) {
   if (error.code === 'AI_NOT_CONFIGURED') {
     return { reason: 'not_configured', message: 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.' };
@@ -15,14 +23,31 @@ function describeFailure(error) {
   return { reason: 'provider_unavailable', message: `Gemini no pudo responder${detail}. La expresión no se agregó; inténtalo de nuevo más tarde.` };
 }
 
+/**
+ * @param {Schemas['ExpressionEntry'] | null} entry
+ * @returns {Schemas['HistorySource']}
+ */
 function historySource(entry) {
   if (!entry) return 'not_found';
   return entry.source === 'ai' && entry.id !== null ? 'ai_saved' : entry.source;
 }
 
+/**
+ * @param {{
+ *   expressions: import('../types/app').ExpressionRepository,
+ *   searchHistory: import('../types/app').SearchHistoryRepository,
+ *   generateDefinition: import('../types/app').GenerateDefinition,
+ *   aiLimiter: import('../types/app').RateLimiter,
+ *   requireAuthentication: import('express').RequestHandler
+ * }} dependencies
+ */
 function createLookupRouter({ expressions, searchHistory, generateDefinition, aiLimiter, requireAuthentication }) {
   const router = express.Router();
 
+  /**
+   * @param {{ expression: string, normalized: string, explicitlySave: boolean }} search
+   * @returns {Promise<Schemas['ExpressionEntry'] | null>}
+   */
   const generateEntry = async ({ expression, normalized, explicitlySave }) => {
     const definition = await generateDefinition(expression);
     if (!definition) return null;
@@ -35,12 +60,13 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, ai
     const { expression, explicitlySave } = parseQuotedExpression(raw);
 
     if (!expression || expression.length > 100) {
-      response.status(400).json({ error: 'La expresión debe tener entre 1 y 100 caracteres.' });
+      replyError(response, 400, 'La expresión debe tener entre 1 y 100 caracteres.');
       return;
     }
 
     const normalized = normalizeExpression(expression);
     let entry = await expressions.findByNormalized(normalized);
+    /** @type {LookupFailure | undefined} */
     let failure;
 
     if (!entry && !aiLimiter.tryConsume(request.user.id)) {
@@ -50,8 +76,9 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, ai
         entry = await generateEntry({ expression, normalized, explicitlySave });
         if (!entry) failure = { reason: 'not_found', message: 'Todavía no tenemos esta expresión en el diccionario.' };
       } catch (error) {
-        console.error('No se pudo generar una definición con IA:', error.message);
-        failure = describeFailure(error);
+        const aiError = /** @type {Error & { code?: string, status?: number }} */ (error);
+        console.error('No se pudo generar una definición con IA:', aiError.message);
+        failure = describeFailure(aiError);
       }
     }
 
@@ -63,7 +90,7 @@ function createLookupRouter({ expressions, searchHistory, generateDefinition, ai
       source: historySource(entry)
     });
 
-    response.json({ found: Boolean(entry), entry, ...failure });
+    reply(response, 'LookupResponse', { found: Boolean(entry), entry, ...failure });
   });
 
   return router;

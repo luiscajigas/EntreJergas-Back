@@ -1,11 +1,14 @@
 const express = require('express');
 const { hashPassword, verifyPassword } = require('../auth/passwords');
 const { clearSessionCookie, readToken } = require('../auth/sessions');
+const { reply, replyError } = require('../http-reply');
 
 const uniqueViolation = '23505';
 
+/** @param {unknown} value */
 const readText = (value) => typeof value === 'string' ? value : '';
 
+/** @param {{ name: string, email: string, password: string }} data */
 function validateRegistration({ name, email, password }) {
   if (name.length < 2 || name.length > 80) return 'El nombre debe tener entre 2 y 80 caracteres.';
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Escribe un correo electrónico válido.';
@@ -13,6 +16,14 @@ function validateRegistration({ name, email, password }) {
   return null;
 }
 
+/**
+ * @param {{
+ *   users: import('../types/app').UserRepository,
+ *   sessions: import('../types/app').SessionStore,
+ *   loginLimiter: import('../types/app').RateLimiter,
+ *   requireAuthentication: import('express').RequestHandler
+ * }} dependencies
+ */
 function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication }) {
   const router = express.Router();
 
@@ -23,7 +34,7 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
 
     const invalid = validateRegistration({ name, email, password });
     if (invalid) {
-      response.status(400).json({ error: invalid });
+      replyError(response, 400, invalid);
       return;
     }
 
@@ -31,13 +42,13 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
     try {
       user = await users.create({ email, name, passwordHash: await hashPassword(password) });
     } catch (error) {
-      if (error.code !== uniqueViolation) throw error;
-      response.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+      if (/** @type {{ code?: string }} */ (error).code !== uniqueViolation) throw error;
+      replyError(response, 409, 'Ya existe una cuenta con ese correo.');
       return;
     }
 
     await sessions.start(user.id, response);
-    response.status(201).json({ user });
+    reply(response, 'AuthResponse', { user }, 201);
   });
 
   router.post('/login', async (request, response) => {
@@ -45,24 +56,24 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
     const password = readText(request.body?.password);
 
     if (loginLimiter.isLimited(email)) {
-      response.status(429).json({ error: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.', code: 'rate_limited' });
+      replyError(response, 429, 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.', 'rate_limited');
       return;
     }
 
     const credentials = await users.findCredentials(email);
     if (!credentials || !await verifyPassword(password, credentials.passwordHash)) {
       loginLimiter.record(email);
-      response.status(401).json({ error: 'Correo o contraseña incorrectos.' });
+      replyError(response, 401, 'Correo o contraseña incorrectos.');
       return;
     }
 
     loginLimiter.reset(email);
     await sessions.start(credentials.user.id, response);
-    response.json({ user: credentials.user });
+    reply(response, 'AuthResponse', { user: credentials.user });
   });
 
   router.get('/me', requireAuthentication, (request, response) => {
-    response.json({ user: request.user });
+    reply(response, 'AuthResponse', { user: request.user });
   });
 
   router.post('/logout', async (request, response) => {

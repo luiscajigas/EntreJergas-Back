@@ -1,10 +1,18 @@
 const express = require('express');
+const { reply } = require('../http-reply');
 
+/**
+ * @param {{
+ *   expressions: import('../types/app').ExpressionRepository,
+ *   searchHistory: import('../types/app').SearchHistoryRepository,
+ *   requireAuthentication: import('express').RequestHandler
+ * }} dependencies
+ */
 function createActivityRouter({ expressions, searchHistory, requireAuthentication }) {
   const router = express.Router();
 
   router.get('/history', requireAuthentication, async (request, response) => {
-    response.json({ items: await searchHistory.listForUser(request.user.id) });
+    reply(response, 'HistoryResponse', { items: await searchHistory.listForUser(request.user.id) });
   });
 
   router.get('/dashboard', requireAuthentication, async (request, response) => {
@@ -13,7 +21,7 @@ function createActivityRouter({ expressions, searchHistory, requireAuthenticatio
       searchHistory.countForUser(request.user.id),
       expressions.countByRegion()
     ]);
-    response.json({ expressions: total, searches, regions });
+    reply(response, 'DashboardResponse', { expressions: total, searches, regions });
   });
 
   return router;
