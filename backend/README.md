@@ -8,7 +8,7 @@ Edita `.env` para desarrollo local y define `DATABASE_URL` con la cadena de cone
 
 En Render crea primero una base PostgreSQL y un servicio web a partir de este repositorio. El `render.yaml` pide `DATABASE_URL` y `CORS_ORIGIN`: usa la **Internal Database URL** de Render y el origen exacto de Vercel, por ejemplo `https://entrejergas.vercel.app`. Render asigna `PORT`; `NODE_ENV=production` habilita SSL en la conexión PostgreSQL. La conexión que usa pgAdmin desde tu PC es la externa; no uses el hostname interno de Render fuera de sus servicios.
 
-La IA se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del servicio (localmente en `.env` o en Render), nunca en Angular ni en Vercel. El proveedor predeterminado es Gemini mediante su endpoint compatible con OpenAI, con el modelo `gemini-3.5-flash-lite`; puedes cambiar el endpoint con `LLM_API_URL` y el modelo con `LLM_MODEL`. Cada respuesta tiene un máximo de 400 tokens. Ante errores transitorios (`503`, timeouts o fallos de red), se reintenta hasta dos veces con espera exponencial. Los errores `429` se devuelven sin reintentar para no aumentar el consumo al alcanzar la cuota. La API distingue una clave ausente, una respuesta JSON inválida, un límite de cuota y un fallo temporal; en todos esos casos confirma que la expresión no se agregó.
+La IA se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del servicio (localmente en `.env` o en Render), nunca en Angular ni en Vercel. El proveedor predeterminado es Gemini mediante su endpoint compatible con OpenAI, con el modelo `gemini-3.5-flash-lite`; puedes cambiar el endpoint con `LLM_API_URL` y el modelo con `LLM_MODEL`. Cada respuesta tiene un máximo de 400 tokens. Ante errores transitorios (`503`, timeouts o fallos de red), se reintenta hasta dos veces con espera exponencial. Los errores `429` se devuelven sin reintentar para no aumentar el consumo al alcanzar la cuota. La API distingue una clave ausente, una respuesta inválida, un límite de cuota y un fallo temporal; en todos esos casos confirma que la expresión no se agregó.
 
 ## Estructura
 
@@ -46,6 +46,17 @@ npm run dev
 
 El servidor escucha en `http://localhost:3000`. Para Render, los comandos configurados en `render.yaml` son `npm install` y `npm start`. En el primer arranque se crean `users`, `user_sessions`, `expressions` y `search_history`, y se insertan expresiones semilla sin duplicarlas. En bases existentes se agrega `search_history.user_id` para asociar las consultas nuevas con su cuenta.
 
+## Qué se guarda
+
+La IA extrae hasta tres expresiones del texto y las clasifica, pero la decisión es del código. Una expresión se agrega al diccionario compartido solo si cumple todo esto:
+
+1. Aparece en el texto del usuario.
+2. No difiere en una sola letra de otra que ya exista; en ese caso se sugiere la correcta.
+3. Es regional, con confianza alta y al menos un país válido.
+4. Una segunda consulta independiente a la IA confirma que existe.
+
+Lo demás se explica sin guardarse, como `mochila`, o se informa como no reconocido. Es una reducción del riesgo y no una garantía: la IA aún puede equivocarse, y por eso estas entradas quedan marcadas con `source: "ai"`.
+
 ## Contrato
 
 - `GET /api/health`: confirma que API y PostgreSQL responden.
@@ -53,12 +64,12 @@ El servidor escucha en `http://localhost:3000`. Para Render, los comandos config
 - `POST /api/auth/login` con `{ "email", "password" }`: valida las credenciales y abre una sesión.
 - `GET /api/auth/me`: devuelve la cuenta de la sesión actual.
 - `POST /api/auth/logout`: revoca la sesión actual.
-- `POST /api/lookup` con `{ "expression": "parcero" }`: requiere sesión y busca primero en `expressions`. Si la expresión no existe, solicita una definición a Gemini. La respuesta es temporal por defecto; para agregarla al diccionario compartido por todas las cuentas, el usuario debe enviar la expresión completa entre comillas, por ejemplo `{ "expression": "“hacer vaca”" }`. Las comillas no guardan una palabra citada dentro de una frase. Las entradas generadas se marcan `source: "ai"`, y el historial diferencia las temporales (`ai`) de las agregadas (`ai_saved`).
+- `POST /api/lookup` con `{ "expression": "qué significa boludo" }`: requiere sesión y acepta hasta 300 caracteres. Si el texto completo está en el diccionario, responde sin consultar la IA. Si no, sigue las reglas de la sección *Qué se guarda*. Devuelve una ficha por expresión en `entries` y las no resueltas en `unresolved`; `entry` se conserva por compatibilidad. El historial registra cada expresión por separado.
 - `POST /api/translate` con `{ "id" }` o, para respuestas temporales, con la definición completa: requiere sesión y devuelve la definición en inglés. Las traducciones de expresiones guardadas se conservan en `expression_translations`, así que la IA solo se consulta una vez por expresión; el texto original en español no cambia.
 - `GET /api/history`: requiere sesión y devuelve las últimas 30 búsquedas de esa cuenta.
 - `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
-Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. Si la IA está disponible pero no puede construir una definición válida, la búsqueda responde `{ "found": false, "entry": null, "message": "..." }`. Se aceptan hasta 100 caracteres.
+Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. Si no hay definición, la búsqueda responde `found: false` con `reason`, un código estable, y `message`, una explicación en español.
 
 ## Pruebas
 
