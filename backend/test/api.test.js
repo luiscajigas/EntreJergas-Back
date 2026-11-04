@@ -277,7 +277,7 @@ test('la distancia de texto solo acepta una diferencia', () => {
   assert.equal(differsByOneEdit('pxrzero', 'parcero'), false);
 });
 
-test('solo guarda si la verificación la confirma y, si falla, igual explica la palabra', async () => {
+test('lo que el revisor rechaza no se muestra y, si no puede revisar, se explica sin guardar', async () => {
   const { cookie } = await registerUser();
   const verifications = { 'jerga rechazada': async () => false, 'jerga sin verificar': async () => { throw new Error('UNAVAILABLE'); } };
   const server = createApp(pool, {
@@ -285,18 +285,22 @@ test('solo guarda si la verificación la confirma y, si falla, igual explica la 
     verifyExpression: (item) => verifications[item.text]()
   }).listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
+  const lookup = (expression) => fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression })
+  }).then((response) => response.json());
 
-  for (const expression of Object.keys(verifications)) {
-    const result = await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ expression })
-    }).then((response) => response.json());
-    assert.equal(result.entries[0].id, null);
-    assert.equal(result.entries[0].classification, 'regional');
-    const stored = await pool.query('SELECT id FROM expressions WHERE normalized_expression = $1', [expression]);
-    assert.equal(stored.rows.length, 0);
-  }
+  const rejected = await lookup('jerga rechazada');
+  assert.deepEqual(rejected.entries, []);
+  assert.deepEqual(rejected.unresolved, [{ text: 'jerga rechazada', reason: 'unknown', suggestion: null }]);
+
+  const unavailable = await lookup('jerga sin verificar');
+  assert.equal(unavailable.entries[0].id, null);
+  assert.equal(unavailable.entries[0].classification, 'regional');
+
+  const stored = await pool.query("SELECT id FROM expressions WHERE normalized_expression IN ('jerga rechazada', 'jerga sin verificar')");
+  assert.equal(stored.rows.length, 0);
   await new Promise((resolve) => server.close(resolve));
 });
 

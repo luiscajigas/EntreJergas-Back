@@ -55,7 +55,7 @@ La IA extrae hasta tres expresiones del texto y las clasifica, pero la decisión
 3. Es regional, con confianza alta y al menos un país válido.
 4. Una segunda consulta independiente a la IA confirma que existe.
 
-Lo demás se explica sin guardarse, como `mochila`, o se informa como no reconocido. Es una reducción del riesgo y no una garantía: la IA aún puede equivocarse, y por eso estas entradas quedan marcadas con `source: "ai"`.
+Lo demás se explica sin guardarse, como `mochila`. Si la verificación rechaza una expresión, no se muestra su definición y se informa como no reconocida. Es una reducción del riesgo y no una garantía: la IA aún puede equivocarse, y por eso estas entradas quedan marcadas con `source: "ai"`.
 
 ## Contrato
 

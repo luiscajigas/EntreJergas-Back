@@ -52,15 +52,15 @@ const notFound = { reason: /** @type {const} */ ('not_found'), message: 'Todaví
  */
 function createLookupService({ expressions, analyzeText, verifyExpression, aiLimiter }) {
   /**
-   * Si la verificación falla, no se guarda: la palabra igual se explica como temporal.
    * @param {AnalyzedExpression} item
+   * @returns {Promise<'confirmed' | 'rejected' | 'unavailable'>}
    */
-  const isVerified = async (item) => {
+  const verify = async (item) => {
     try {
-      return await verifyExpression(item);
+      return await verifyExpression(item) ? 'confirmed' : 'rejected';
     } catch (error) {
       console.error('No se pudo verificar la expresión:', /** @type {Error} */ (error).message);
-      return false;
+      return 'unavailable';
     }
   };
 
@@ -84,8 +84,13 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
     if (!item.definition) return null;
 
     const { countries, register } = item;
-    if (shouldSave(item) && await isVerified(item)) {
-      return expressions.saveGenerated(normalized, item.definition, { countries, register });
+    if (item.type === 'regional') {
+      const verification = await verify(item);
+      // Si el revisor no la reconoce, es mejor no responder que mostrar un significado inventado.
+      if (verification === 'rejected') return null;
+      if (verification === 'confirmed' && shouldSave(item)) {
+        return expressions.saveGenerated(normalized, item.definition, { countries, register });
+      }
     }
     return {
       id: null,
