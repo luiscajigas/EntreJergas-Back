@@ -10,7 +10,18 @@ export type Schemas = components['schemas'];
 /** Definición sin identificador, tal como la produce la IA. */
 export type Definition = Schemas['DefinitionText'] & { expression: string };
 
-export type GenerateDefinition = (expression: string) => Promise<Definition | null>;
+export interface AnalyzedExpression {
+  text: string;
+  type: 'regional' | 'common' | 'typo' | 'unknown';
+  confidence: 'high' | 'medium' | 'low';
+  suggestion: string | null;
+  countries: string[];
+  register: Schemas['ExpressionEntry']['register'];
+  definition: Definition | null;
+}
+
+export type AnalyzeText = (text: string) => Promise<AnalyzedExpression[]>;
+export type VerifyExpression = (item: AnalyzedExpression) => Promise<boolean>;
 export type TranslateDefinition = (definition: Definition) => Promise<Definition>;
 
 export type ExpressionRepository = ReturnType<typeof createExpressionRepository>;
