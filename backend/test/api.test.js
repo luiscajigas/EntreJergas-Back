@@ -544,3 +544,13 @@ test('el traductor envía la definición como datos y valida la respuesta', asyn
 
   await assert.rejects(createAiTranslator({ apiKey: '' })({ expression: 'x' }), { code: 'AI_NOT_CONFIGURED' });
 });
+
+test('un JSON inválido o demasiado grande responde como error del cliente', async () => {
+  const headers = { 'content-type': 'application/json' };
+  const malformed = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST', headers, body: '{ no es json' });
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).error, 'La solicitud no es válida.');
+
+  const tooLarge = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST', headers, body: JSON.stringify({ email: 'x'.repeat(20000) }) });
+  assert.equal(tooLarge.status, 413);
+});
