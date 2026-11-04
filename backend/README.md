@@ -27,6 +27,7 @@ El servidor escucha en `http://localhost:3000`. Para Render, los comandos config
 - `GET /api/auth/me`: devuelve la cuenta de la sesión actual.
 - `POST /api/auth/logout`: revoca la sesión actual.
 - `POST /api/lookup` con `{ "expression": "parcero" }`: requiere sesión y busca primero en `expressions`. Si la expresión no existe, solicita una definición a Gemini. La respuesta es temporal por defecto; para agregarla al diccionario compartido por todas las cuentas, el usuario debe enviar la expresión completa entre comillas, por ejemplo `{ "expression": "“hacer vaca”" }`. Las comillas no guardan una palabra citada dentro de una frase. Las entradas generadas se marcan `source: "ai"`, y el historial diferencia las temporales (`ai`) de las agregadas (`ai_saved`).
+- `POST /api/translate` con `{ "id" }` o, para respuestas temporales, con la definición completa: requiere sesión y devuelve la definición en inglés. Las traducciones de expresiones guardadas se conservan en `expression_translations`, así que la IA solo se consulta una vez por expresión; el texto original en español no cambia.
 - `GET /api/history`: requiere sesión y devuelve las últimas 30 búsquedas de esa cuenta.
 - `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
