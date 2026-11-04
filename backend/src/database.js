@@ -57,6 +57,12 @@ async function initializeDatabase(databasePool = pool) {
       ALTER TABLE expressions
         ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'database';
 
+      ALTER TABLE expressions
+        ADD COLUMN IF NOT EXISTS countries TEXT[] NOT NULL DEFAULT '{}';
+
+      ALTER TABLE expressions
+        ADD COLUMN IF NOT EXISTS language_register TEXT;
+
       CREATE TABLE IF NOT EXISTS search_history (
         id BIGSERIAL PRIMARY KEY,
         user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -100,13 +106,20 @@ async function initializeDatabase(databasePool = pool) {
     `);
 
     await client.query('BEGIN');
-    for (const [normalized, expression, meaning, region, context, equivalent, example] of seedExpressions) {
+    for (const [normalized, expression, meaning, region, context, equivalent, example, countries, register] of seedExpressions) {
       await client.query(`
         INSERT INTO expressions
-          (normalized_expression, expression, meaning, region, context, equivalent, example)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+          (normalized_expression, expression, meaning, region, context, equivalent, example, countries, language_register)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (normalized_expression) DO NOTHING
-      `, [normalized, expression, meaning, region, context, equivalent, example]);
+      `, [normalized, expression, meaning, region, context, equivalent, example, countries, register]);
+
+      // Completa las filas creadas antes de que existieran estas columnas, sin tocar su definición.
+      await client.query(`
+        UPDATE expressions
+        SET countries = $1, language_register = $2
+        WHERE normalized_expression = $3 AND language_register IS NULL
+      `, [countries, register, normalized]);
     }
     await client.query('COMMIT');
   } catch (error) {
