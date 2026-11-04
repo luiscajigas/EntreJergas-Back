@@ -20,6 +20,10 @@ function assertMatchesContract(schema, body) {
 }
 
 const definition = { meaning: 'Significado', region: 'Colombia', context: 'Informal', equivalent: 'Algo', example: 'Un ejemplo.' };
+const item = (text, overrides = {}) => ({
+  text, type: 'regional', confidence: 'high', suggestion: null, countries: ['AR'], register: 'vulgar',
+  definition: { expression: text, ...definition }, ...overrides
+});
 let pool;
 let server;
 let baseUrl;
@@ -29,7 +33,13 @@ before(async () => {
   pool = new Pool();
   await initializeDatabase(pool);
   server = createApp(pool, {
-    generateDefinition: async (expression) => expression === 'nada' ? null : ({ expression, ...definition }),
+    verifyExpression: async () => true,
+    analyzeText: async (text) => {
+      if (text === 'nada') return [];
+      if (text === 'palabra temporal') return [item(text, { type: 'common', countries: [] })];
+      if (text === 'typo') return [item(text, { type: 'typo', suggestion: 'parcero', definition: null })];
+      return [item(text)];
+    },
     translateDefinition: async ({ expression }) => ({ expression, ...definition, meaning: 'Meaning' })
   }).listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
@@ -69,13 +79,14 @@ test('las respuestas del servidor cumplen el contrato', async () => {
 
   const post = (route, body) => fetch(`${baseUrl}/api${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const lookups = [];
-  for (const expression of ['parcero', 'palabra temporal', '"palabra guardada"', 'nada']) {
+  for (const expression of ['parcero', 'palabra temporal', '"palabra guardada"', 'nada', 'typo']) {
     const body = await (await post('/lookup', { expression })).json();
     assertMatchesContract('LookupResponse', body);
     lookups.push(body);
   }
   assert.equal(lookups[1].entry.id, null);
   assert.equal(lookups[3].entry, null);
+  assert.equal(lookups[4].unresolved[0].suggestion, 'parcero');
 
   const saved = await post('/translate', { id: lookups[0].entry.id });
   assertMatchesContract('TranslateResponse', await saved.json());

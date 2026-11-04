@@ -2,14 +2,35 @@ const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
-const { createAiProvider, createAiTranslator } = require('../src/ai-provider');
+const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
+const { seedExpressions } = require('../src/seed-expressions');
+const { differsByOneEdit } = require('../src/text-distance');
 const { createRateLimiter } = require('../src/rate-limiter');
 
 let pool;
 let server;
 let baseUrl;
 let userSequence = 0;
+
+/** Expresión como la devolvería el analizador. */
+function analyzed(text, overrides = {}) {
+  return {
+    text,
+    type: 'regional',
+    confidence: 'high',
+    suggestion: null,
+    countries: ['AR'],
+    register: 'informal',
+    definition: { expression: text, meaning: 'Expresión de prueba.', region: 'Argentina', context: 'Uso coloquial.', equivalent: 'equivalente', example: `Dijo: ${text}.` },
+    ...overrides
+  };
+}
+
+const analysisContent = (text, fields = {}) => JSON.stringify({ expressions: [{
+  text, type: 'regional', confidence: 'high', suggestion: null, countries: ['AR'], register: 'informal',
+  meaning: 'Significado', region: 'Región', context: 'Contexto', equivalent: 'Equivalente', example: 'Ejemplo', ...fields
+}] });
 
 before(async () => {
   const database = newDb();
@@ -95,90 +116,200 @@ test('registro, login, sesión HttpOnly y logout funcionan', async () => {
   assert.equal(expiredSession.status, 401);
 });
 
-test('lookup prioriza el diccionario y usa IA para expresiones que no existen', async () => {
+test('lookup prioriza el diccionario y solo guarda lo regional con confianza alta', async () => {
   const { cookie } = await registerUser();
-  let generatedCount = 0;
+  let calls = 0;
   const aiServer = createApp(pool, {
-    generateDefinition: async (expression) => {
-      generatedCount += 1;
-      return {
-        expression,
-        meaning: 'Expresión de prueba.',
-        region: 'No identificada con certeza',
-        context: 'Uso coloquial; verifica el contexto local.',
-        equivalent: 'frase equivalente',
-        example: `Dijo: ${expression}.`
-      };
+    verifyExpression: async () => true,
+    analyzeText: async (text) => {
+      calls += 1;
+      return text === 'palabra dudosa' ? [analyzed(text, { confidence: 'medium' })] : [analyzed(text)];
     }
   }).listen(0);
   await new Promise((resolve) => aiServer.once('listening', resolve));
-  const aiBaseUrl = `http://127.0.0.1:${aiServer.address().port}`;
-
-  const knownResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
+  const url = `http://127.0.0.1:${aiServer.address().port}/api`;
+  const lookup = async (expression) => (await fetch(`${url}/lookup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: '¿Qué chimba?' })
-  });
-  const known = await knownResponse.json();
+    body: JSON.stringify({ expression })
+  })).json();
+
+  const known = await lookup('¿Qué chimba?');
   assert.equal(known.found, true);
   assert.equal(known.entry.expression, 'qué chimba');
   assert.equal(known.entry.source, 'database');
-  assert.equal(generatedCount, 0);
+  assert.deepEqual(known.entries, [known.entry]);
+  assert.deepEqual(known.entry.countries, ['CO']);
+  assert.equal(calls, 0);
 
-  const missingResponse = await fetch(`${baseUrl}/api/lookup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: 'una frase nueva' })
-  });
-  const missing = await missingResponse.json();
-  assert.equal(missing.found, false);
-  assert.equal(missing.entry, null);
+  const saved = await lookup('una jerga nueva');
+  assert.equal(saved.entry.source, 'ai');
+  assert.ok(saved.entry.id);
+  assert.deepEqual(saved.entry.countries, ['AR']);
+  assert.equal(saved.entry.register, 'informal');
+  assert.equal(calls, 1);
 
-  const aiResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: 'una frase nueva' })
-  });
-  const aiResult = await aiResponse.json();
-  assert.equal(aiResult.found, true);
-  assert.equal(aiResult.entry.source, 'ai');
-  assert.equal(aiResult.entry.id, null);
-  assert.equal(generatedCount, 1);
+  const repeated = await lookup('«una jerga nueva»');
+  assert.equal(repeated.entry.id, saved.entry.id);
+  assert.equal(calls, 1);
 
-  const quotedResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: '“una frase nueva”' })
-  });
-  const quotedResult = await quotedResponse.json();
-  assert.equal(quotedResult.entry.expression, 'una frase nueva');
-  assert.equal(quotedResult.entry.source, 'ai');
-  assert.ok(quotedResult.entry.id);
-  assert.equal(generatedCount, 2);
-
-  const savedResponse = await fetch(`${aiBaseUrl}/api/lookup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: 'una frase nueva' })
-  });
-  const savedResult = await savedResponse.json();
-  assert.equal(savedResult.entry.source, 'ai');
-  assert.equal(generatedCount, 2);
+  const doubtful = await lookup('palabra dudosa');
+  assert.equal(doubtful.entry.id, null);
+  assert.equal(doubtful.entry.classification, 'regional');
   await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
 
   const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
-  assert.equal(history.items.length, 5);
-  assert.equal(history.items[0].expression, 'una frase nueva');
-  assert.equal(history.items[0].source, 'ai_saved');
-  assert.equal(history.items[1].source, 'ai_saved');
-  assert.equal(history.items[2].source, 'ai');
-  assert.equal(history.items[3].source, 'not_found');
-  assert.equal(history.items[4].source, 'database');
+  assert.deepEqual(history.items.map((item) => item.source), ['ai', 'ai_saved', 'ai_saved', 'database']);
 
   const dashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie } }).then((response) => response.json());
-  assert.equal(dashboard.expressions, 17);
-  assert.equal(dashboard.searches, 5);
+  assert.ok(dashboard.expressions > seedExpressions.length);
+  assert.equal(dashboard.searches, 4);
   assert.ok(dashboard.regions.every((region) => Number.isInteger(region.count)));
+  assert.ok(dashboard.countries.some(({ country, count }) => country === 'CO' && count > 0));
+  assert.ok(dashboard.countries.some(({ country }) => country === 'MX'));
+});
+
+test('una frase devuelve una ficha por expresión y decide cuál se guarda', async () => {
+  const { cookie } = await registerUser();
+  const sentence = 'hola como estas quiero saber que significa parcero ya que estoy en colombia y que significa mochila, parzero, asdfgh y mi jerga rara';
+  const server = createApp(pool, {
+    analyzeText: async () => [
+      analyzed('parcero', { countries: ['CO'] }),
+      analyzed('mochila', { type: 'common', countries: [] }),
+      analyzed('parzero', { type: 'typo', suggestion: 'parcero', definition: null })
+    ]
+  }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+
+  const result = await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: sentence })
+  }).then((response) => response.json());
+  await new Promise((resolve) => server.close(resolve));
+
+  assert.deepEqual(result.entries.map((entry) => entry.expression), ['parcero', 'mochila']);
+  assert.equal(result.entries[0].source, 'database');
+  assert.equal(result.entries[1].id, null);
+  assert.equal(result.entries[1].classification, 'common');
+  assert.deepEqual(result.unresolved, [{ text: 'parzero', reason: 'typo', suggestion: 'parcero' }]);
+
+  const stored = await pool.query("SELECT id FROM expressions WHERE normalized_expression IN ('mochila', 'parzero')");
+  assert.equal(stored.rows.length, 0);
+  const sentenceStored = await pool.query('SELECT id FROM expressions WHERE normalized_expression LIKE $1', ['hola como%']);
+  assert.equal(sentenceStored.rows.length, 0);
+
+  const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
+  assert.deepEqual(history.items.map((item) => item.expression).sort(), ['mochila', 'parcero', 'parzero']);
+});
+
+test('nunca guarda lo que no cumple la regla ni lo que la IA no sacó del texto', async () => {
+  const { cookie } = await registerUser();
+  const cases = {
+    'jerga sin pais': [analyzed('jerga sin pais', { countries: [] })],
+    'jerga baja': [analyzed('jerga baja', { confidence: 'low' })],
+    'palabra comun': [analyzed('palabra comun', { type: 'common' })],
+    'qwerty raro': [analyzed('qwerty raro', { type: 'unknown', definition: null })],
+    'texto cualquiera': [analyzed('palabra inventada por la ia')]
+  };
+  const server = createApp(pool, { verifyExpression: async () => true, analyzeText: async (text) => cases[text] }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  for (const expression of Object.keys(cases)) {
+    await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ expression })
+    });
+  }
+  await new Promise((resolve) => server.close(resolve));
+
+  const names = [...Object.keys(cases), 'palabra inventada por la ia'];
+  const stored = await pool.query(`SELECT id FROM expressions WHERE normalized_expression IN (${names.map((_, index) => `$${index + 1}`).join(', ')})`, names);
+  assert.equal(stored.rows.length, 0);
+});
+
+test('el analizador descarta datos inválidos y limita las expresiones', async () => {
+  const respond = (expressions) => createAiAnalyzer({
+    apiKey: 'test-key',
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ expressions }) } }] }) })
+  })('texto');
+  const base = JSON.parse(analysisContent('uno')).expressions[0];
+
+  const [first] = await respond([{ ...base, countries: ['ar', 'XX', 'AR', 5], register: 'raro', confidence: 'segura' }]);
+  assert.deepEqual(first.countries, ['AR']);
+  assert.equal(first.register, null);
+  assert.equal(first.confidence, 'low');
+
+  const many = await respond(['uno', 'dos', 'tres', 'cuatro'].map((text) => ({ ...base, text })));
+  assert.equal(many.length, 3);
+
+  assert.deepEqual(await respond([]), []);
+  await assert.rejects(respond([{ text: 'x', type: 'desconocido' }]), { code: 'AI_INVALID_RESPONSE' });
+  await assert.rejects(respond([{ text: 'x', type: 'regional' }]), { code: 'AI_INVALID_RESPONSE' });
+});
+
+test('una palabra a una letra de otra del diccionario se trata como error, aunque la IA la dé por real', async () => {
+  const { cookie } = await registerUser();
+  const server = createApp(pool, { verifyExpression: async () => true, analyzeText: async (text) => [analyzed(text, { countries: ['MX'] })] }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const lookup = async (expression) => (await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression })
+  })).json();
+
+  const typo = await lookup('parzero');
+  assert.deepEqual(typo.entries, []);
+  assert.deepEqual(typo.unresolved, [{ text: 'parzero', reason: 'typo', suggestion: 'parcero' }]);
+  const stored = await pool.query("SELECT id FROM expressions WHERE normalized_expression = 'parzero'");
+  assert.equal(stored.rows.length, 0);
+
+  assert.ok((await lookup('jerga bien distinta')).entries[0].id);
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test('la distancia de texto solo acepta una diferencia', () => {
+  assert.equal(differsByOneEdit('parzero', 'parcero'), true);
+  assert.equal(differsByOneEdit('parcro', 'parcero'), true);
+  assert.equal(differsByOneEdit('parceroo', 'parcero'), true);
+  assert.equal(differsByOneEdit('parcero', 'parcero'), false);
+  assert.equal(differsByOneEdit('parce', 'parcero'), false);
+  assert.equal(differsByOneEdit('pxrzero', 'parcero'), false);
+});
+
+test('solo guarda si la verificación la confirma y, si falla, igual explica la palabra', async () => {
+  const { cookie } = await registerUser();
+  const verifications = { 'jerga rechazada': async () => false, 'jerga sin verificar': async () => { throw new Error('UNAVAILABLE'); } };
+  const server = createApp(pool, {
+    analyzeText: async (text) => [analyzed(text)],
+    verifyExpression: (item) => verifications[item.text]()
+  }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+
+  for (const expression of Object.keys(verifications)) {
+    const result = await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ expression })
+    }).then((response) => response.json());
+    assert.equal(result.entries[0].id, null);
+    assert.equal(result.entries[0].classification, 'regional');
+    const stored = await pool.query('SELECT id FROM expressions WHERE normalized_expression = $1', [expression]);
+    assert.equal(stored.rows.length, 0);
+  }
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test('el verificador solo acepta un sí explícito', async () => {
+  const answer = (content) => createAiVerifier({
+    apiKey: 'test-key',
+    fetchImplementation: async () => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) })
+  })(analyzed('palabra'));
+
+  assert.equal(await answer('{"verified":true}'), true);
+  assert.equal(await answer('{"verified":false}'), false);
+  assert.equal(await answer('{"verified":"true"}'), false);
+  assert.equal(await answer('{}'), false);
 });
 
 test('lookup valida longitud y atiende consultas simultáneas', async () => {
@@ -186,7 +317,7 @@ test('lookup valida longitud y atiende consultas simultáneas', async () => {
   const invalid = await fetch(`${baseUrl}/api/lookup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ expression: 'x'.repeat(101) })
+    body: JSON.stringify({ expression: 'x'.repeat(301) })
   });
   assert.equal(invalid.status, 400);
 
@@ -242,10 +373,10 @@ test('incluye migración idempotente para el historial de instalaciones existent
   assert.match(statements.join('\n'), /ADD COLUMN IF NOT EXISTS result_source TEXT NOT NULL DEFAULT 'not_found'/i);
 });
 
-test('proveedor IA valida JSON y usa Gemini con respuestas acotadas por defecto', async () => {
+test('analizador IA valida JSON y usa Gemini con respuestas acotadas por defecto', async () => {
   let requestedUrl;
   let requestedBody;
-  const generateDefinition = createAiProvider({
+  const analyzeText = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async (url, options) => {
       requestedUrl = url;
@@ -253,31 +384,25 @@ test('proveedor IA valida JSON y usa Gemini con respuestas acotadas por defecto'
       return {
         ok: true,
         json: async () => ({
-          choices: [{ message: { content: JSON.stringify({
-            meaning: 'Significado',
-            region: 'Región',
-            context: 'Contexto',
-            equivalent: 'Equivalente',
-            example: 'Ejemplo'
-          }) } }]
+          choices: [{ message: { content: analysisContent('palabra nueva') } }]
         })
       };
     }
   });
 
-  const definition = await generateDefinition('palabra nueva');
+  const [item] = await analyzeText('palabra nueva');
   assert.equal(requestedUrl, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
   assert.equal(requestedBody.model, 'gemini-3.5-flash-lite');
-  assert.equal(requestedBody.max_tokens, 400);
-  assert.equal(definition.expression, 'palabra nueva');
-  assert.equal(definition.meaning, 'Significado');
+  assert.equal(requestedBody.max_tokens, 1400);
+  assert.equal(item.text, 'palabra nueva');
+  assert.equal(item.definition.meaning, 'Significado');
 });
 
-test('proveedor IA desactivado sin clave y descarta respuestas incompletas', async () => {
-  const disabledProvider = createAiProvider({ apiKey: '' });
+test('analizador IA desactivado sin clave y descarta respuestas incompletas', async () => {
+  const disabledProvider = createAiAnalyzer({ apiKey: '' });
   await assert.rejects(disabledProvider('palabra'), { code: 'AI_NOT_CONFIGURED' });
 
-  const invalidProvider = createAiProvider({
+  const invalidProvider = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async () => ({
       ok: true,
@@ -287,10 +412,10 @@ test('proveedor IA desactivado sin clave y descarta respuestas incompletas', asy
   await assert.rejects(invalidProvider('palabra'), { code: 'AI_INVALID_RESPONSE' });
 });
 
-test('lookup explica cuando falta LLM_API_KEY y no guarda la expresión citada', async () => {
+test('lookup explica cuando falta LLM_API_KEY y no guarda la expresión', async () => {
   const { cookie } = await registerUser();
   const unavailableServer = createApp(pool, {
-    generateDefinition: createAiProvider({ apiKey: '' })
+    analyzeText: createAiAnalyzer({ apiKey: '' })
   }).listen(0);
   await new Promise((resolve) => unavailableServer.once('listening', resolve));
 
@@ -306,9 +431,9 @@ test('lookup explica cuando falta LLM_API_KEY y no guarda la expresión citada',
   assert.match(result.message, /LLM_API_KEY/);
 });
 
-test('proveedor IA reintenta ante 503 y completa la definición', async () => {
+test('analizador IA reintenta ante 503 y completa el análisis', async () => {
   let calls = 0;
-  const generateDefinition = createAiProvider({
+  const analyzeText = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async () => {
       calls += 1;
@@ -317,26 +442,20 @@ test('proveedor IA reintenta ante 503 y completa la definición', async () => {
       }
       return {
         ok: true,
-        json: async () => ({ choices: [{ message: { content: JSON.stringify({
-          meaning: 'Significado',
-          region: 'Región',
-          context: 'Contexto',
-          equivalent: 'Equivalente',
-          example: 'Ejemplo'
-        }) } }] })
+        json: async () => ({ choices: [{ message: { content: analysisContent('palabra nueva') } }] })
       };
     }
   });
 
-  const definition = await generateDefinition('palabra nueva');
+  const [item] = await analyzeText('palabra nueva');
   assert.equal(calls, 2);
-  assert.equal(definition.meaning, 'Significado');
+  assert.equal(item.definition.meaning, 'Significado');
 });
 
-test('un 503 de Gemini explica el fallo y no guarda la expresión citada', async () => {
+test('un 503 de Gemini explica el fallo y no guarda la expresión', async () => {
   const { cookie } = await registerUser();
   const unavailableServer = createApp(pool, {
-    generateDefinition: async () => {
+    analyzeText: async () => {
       const error = new Error('UNAVAILABLE');
       error.status = 503;
       throw error;
@@ -364,7 +483,7 @@ test('un 503 de Gemini explica el fallo y no guarda la expresión citada', async
 test('un 429 explica que se alcanzó la cuota y no agrega la expresión', async () => {
   const { cookie } = await registerUser();
   const limitedServer = createApp(pool, {
-    generateDefinition: async () => {
+    analyzeText: async () => {
       const error = new Error('RESOURCE_EXHAUSTED');
       error.status = 429;
       throw error;
@@ -389,10 +508,10 @@ test('un 429 explica que se alcanzó la cuota y no agrega la expresión', async 
   assert.equal(saved.rows.length, 0);
 });
 
-test('proveedor IA limita los reintentos y usa espera exponencial', async () => {
+test('analizador IA limita los reintentos y usa espera exponencial', async () => {
   let calls = 0;
   const waits = [];
-  const generateDefinition = createAiProvider({
+  const analyzeText = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async () => {
       calls += 1;
@@ -402,15 +521,15 @@ test('proveedor IA limita los reintentos y usa espera exponencial', async () => 
     randomImplementation: () => 0
   });
 
-  await assert.rejects(generateDefinition('palabra nueva'), { status: 503 });
+  await assert.rejects(analyzeText('palabra nueva'), { status: 503 });
   assert.equal(calls, 3);
   assert.deepEqual(waits, [1000, 2000]);
 });
 
-test('proveedor IA no reintenta un 429 de cuota', async () => {
+test('analizador IA no reintenta un 429 de cuota', async () => {
   let calls = 0;
   const waits = [];
-  const generateDefinition = createAiProvider({
+  const analyzeText = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async () => {
       calls += 1;
@@ -419,15 +538,15 @@ test('proveedor IA no reintenta un 429 de cuota', async () => {
     waitImplementation: async (milliseconds) => waits.push(milliseconds)
   });
 
-  await assert.rejects(generateDefinition('palabra nueva'), { status: 429 });
+  await assert.rejects(analyzeText('palabra nueva'), { status: 429 });
   assert.equal(calls, 1);
   assert.deepEqual(waits, []);
 });
 
-test('proveedor IA reintenta los timeouts y termina con error 504', async () => {
+test('analizador IA reintenta los timeouts y termina con error 504', async () => {
   let calls = 0;
   const waits = [];
-  const generateDefinition = createAiProvider({
+  const analyzeText = createAiAnalyzer({
     apiKey: 'test-key',
     fetchImplementation: async () => {
       calls += 1;
@@ -437,7 +556,7 @@ test('proveedor IA reintenta los timeouts y termina con error 504', async () => 
     randomImplementation: () => 0
   });
 
-  await assert.rejects(generateDefinition('palabra nueva'), {
+  await assert.rejects(analyzeText('palabra nueva'), {
     status: 504,
     message: 'Gemini agotó el tiempo de espera.'
   });
@@ -448,7 +567,7 @@ test('translate traduce una expresión guardada una sola vez y luego usa la copi
   const { cookie } = await registerUser();
   let calls = 0;
   const translatingServer = createApp(pool, {
-    generateDefinition: async () => null,
+    analyzeText: async () => [],
     translateDefinition: async (definition) => {
       calls += 1;
       assert.equal(definition.expression, 'parcero');
@@ -479,7 +598,7 @@ test('translate acepta definiciones temporales, valida los datos y exige sesión
   const { cookie } = await registerUser();
   let received;
   const translatingServer = createApp(pool, {
-    generateDefinition: async () => null,
+    analyzeText: async () => [],
     translateDefinition: async (definition) => {
       received = definition;
       return { ...definition, meaning: 'Translated' };
@@ -510,7 +629,7 @@ test('translate acepta definiciones temporales, valida los datos y exige sesión
 test('translate responde 502 y no guarda nada si la IA falla', async () => {
   const { cookie } = await registerUser();
   const failingServer = createApp(pool, {
-    generateDefinition: async () => null,
+    analyzeText: async () => [],
     translateDefinition: async () => { throw new Error('UNAVAILABLE'); }
   }).listen(0);
   await new Promise((resolve) => failingServer.once('listening', resolve));
@@ -566,7 +685,7 @@ test('lookup indica con un código el motivo por el que no hay definición', asy
   ];
 
   for (const [failure, reason] of failures) {
-    const failingServer = createApp(pool, { generateDefinition: async () => { throw failure; } }).listen(0);
+    const failingServer = createApp(pool, { analyzeText: async () => { throw failure; } }).listen(0);
     await new Promise((resolve) => failingServer.once('listening', resolve));
     const response = await fetch(`http://127.0.0.1:${failingServer.address().port}/api/lookup`, {
       method: 'POST',
@@ -596,7 +715,7 @@ test('la IA tiene un límite por cuenta que no afecta las palabras del diccionar
   const { cookie } = await registerUser();
   let calls = 0;
   const limitedServer = createApp(pool, {
-    generateDefinition: async () => { calls += 1; return null; },
+    analyzeText: async () => { calls += 1; return []; },
     translateDefinition: async () => { throw new Error('no debería llamarse'); },
     aiLimiter: createRateLimiter({ max: 1, windowMs: 60000 })
   }).listen(0);
