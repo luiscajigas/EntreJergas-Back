@@ -1,12 +1,10 @@
 const cors = require('cors');
 const express = require('express');
-const { createHash, randomBytes } = require('node:crypto');
 const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
 const { hashPassword, verifyPassword } = require('./auth/passwords');
+const { createRequireAuthentication } = require('./auth/require-authentication');
+const { clearSessionCookie, createSessionStore, readToken } = require('./auth/sessions');
 const { normalizeExpression, parseQuotedExpression } = require('./expression-text');
-
-const sessionCookieName = 'entrejergas_session';
-const sessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 
 function serializeExpression(row) {
   return {
@@ -23,57 +21,8 @@ function serializeExpression(row) {
   };
 }
 
-function hashToken(token) {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-function readSessionToken(request) {
-  const cookieHeader = request.headers.cookie || '';
-  const cookie = cookieHeader.split(';').map((value) => value.trim())
-    .find((value) => value.startsWith(`${sessionCookieName}=`));
-  return cookie ? cookie.slice(sessionCookieName.length + 1) : null;
-}
-
-function setSessionCookie(response, token) {
-  const attributes = [
-    `${sessionCookieName}=${token}`,
-    'Path=/api',
-    'HttpOnly',
-    'SameSite=Lax',
-    `Max-Age=${sessionDurationMs / 1000}`
-  ];
-  if (process.env.NODE_ENV === 'production') attributes.push('Secure');
-  response.setHeader('Set-Cookie', attributes.join('; '));
-}
-
-function clearSessionCookie(response) {
-  const attributes = [
-    `${sessionCookieName}=`,
-    'Path=/api',
-    'HttpOnly',
-    'SameSite=Lax',
-    'Max-Age=0',
-    'Expires=Thu, 01 Jan 1970 00:00:00 GMT'
-  ];
-  if (process.env.NODE_ENV === 'production') attributes.push('Secure');
-  response.setHeader('Set-Cookie', attributes.join('; '));
-}
-
 function serializeUser(user) {
   return { id: Number(user.id), email: user.email, name: user.name };
-}
-
-async function createSession(pool, user, response) {
-  const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString();
-
-  await pool.query('DELETE FROM user_sessions WHERE expires_at <= NOW()');
-  await pool.query(`
-    INSERT INTO user_sessions (token_hash, user_id, expires_at)
-    VALUES ($1, $2, $3)
-  `, [hashToken(token), user.id, expiresAt]);
-
-  setSessionCookie(response, token);
 }
 
 function createApp(pool, {
@@ -88,29 +37,8 @@ function createApp(pool, {
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '10kb' }));
 
-  const requireAuthentication = async (request, response, next) => {
-    const token = readSessionToken(request);
-    if (!token) {
-      return response.status(401).json({ error: 'Inicia sesión para continuar.' });
-    }
-
-    const result = await pool.query(`
-      SELECT users.id, users.email, users.display_name AS name
-      FROM user_sessions
-      JOIN users ON users.id = user_sessions.user_id
-      WHERE user_sessions.token_hash = $1
-        AND user_sessions.expires_at > NOW()
-    `, [hashToken(token)]);
-    const user = result.rows[0];
-
-    if (!user) {
-      clearSessionCookie(response);
-      return response.status(401).json({ error: 'Tu sesión venció. Inicia sesión nuevamente.' });
-    }
-
-    request.user = serializeUser(user);
-    return next();
-  };
+  const sessions = createSessionStore(pool);
+  const requireAuthentication = createRequireAuthentication(sessions);
 
   app.get('/api/health', async (_request, response) => {
     await pool.query('SELECT 1');
@@ -147,7 +75,7 @@ function createApp(pool, {
       throw error;
     }
 
-    await createSession(pool, user, response);
+    await sessions.start(user.id, response);
     return response.status(201).json({ user: serializeUser(user) });
   });
 
@@ -166,7 +94,7 @@ function createApp(pool, {
       return response.status(401).json({ error: 'Correo o contraseña incorrectos.' });
     }
 
-    await createSession(pool, user, response);
+    await sessions.start(user.id, response);
     return response.json({ user: serializeUser(user) });
   });
 
@@ -175,8 +103,8 @@ function createApp(pool, {
   });
 
   app.post('/api/auth/logout', async (request, response) => {
-    const token = readSessionToken(request);
-    if (token) await pool.query('DELETE FROM user_sessions WHERE token_hash = $1', [hashToken(token)]);
+    const token = readToken(request);
+    if (token) await sessions.end(token);
     clearSessionCookie(response);
     return response.status(204).end();
   });
