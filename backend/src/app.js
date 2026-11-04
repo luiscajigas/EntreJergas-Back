@@ -1,10 +1,11 @@
 const cors = require('cors');
 const express = require('express');
-const { createAiProvider, createAiTranslator } = require('./ai-provider');
+const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('./ai-provider');
 const { createRequireAuthentication } = require('./auth/require-authentication');
 const { createSessionStore } = require('./auth/sessions');
 const { errorHandler } = require('./error-handler');
 const { reply } = require('./http-reply');
+const { createLookupService } = require('./lookup-service');
 const { createRateLimiter } = require('./rate-limiter');
 const { createExpressionRepository } = require('./repositories/expressions');
 const { createSearchHistoryRepository } = require('./repositories/search-history');
@@ -20,14 +21,16 @@ const { createTranslateRouter } = require('./routes/translate');
  *
  * @param {import('pg').Pool} pool
  * @param {{
- *   generateDefinition?: import('./types/app').GenerateDefinition,
+ *   analyzeText?: import('./types/app').AnalyzeText,
+ *   verifyExpression?: import('./types/app').VerifyExpression,
  *   translateDefinition?: import('./types/app').TranslateDefinition,
  *   aiLimiter?: import('./types/app').RateLimiter,
  *   loginLimiter?: import('./types/app').RateLimiter
  * }} [options]
  */
 function createApp(pool, {
-  generateDefinition = createAiProvider(),
+  analyzeText = createAiAnalyzer(),
+  verifyExpression = createAiVerifier(),
   translateDefinition = createAiTranslator(),
   aiLimiter = createRateLimiter({ max: 30, windowMs: 60 * 1000 }),
   loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 })
@@ -52,7 +55,8 @@ function createApp(pool, {
 
   const expressions = createExpressionRepository(pool);
   const searchHistory = createSearchHistoryRepository(pool);
-  app.use('/api', createLookupRouter({ expressions, searchHistory, generateDefinition, aiLimiter, requireAuthentication }));
+  const lookupService = createLookupService({ expressions, analyzeText, verifyExpression, aiLimiter });
+  app.use('/api', createLookupRouter({ lookupService, searchHistory, requireAuthentication }));
   app.use('/api', createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication }));
 
   app.use('/api', createActivityRouter({ expressions, searchHistory, requireAuthentication }));
