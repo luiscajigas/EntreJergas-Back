@@ -1,9 +1,10 @@
 const cors = require('cors');
 const express = require('express');
 const { createAiProvider, createAiTranslator, validateDefinition } = require('./ai-provider');
-const { hashPassword, verifyPassword } = require('./auth/passwords');
 const { createRequireAuthentication } = require('./auth/require-authentication');
-const { clearSessionCookie, createSessionStore, readToken } = require('./auth/sessions');
+const { createSessionStore } = require('./auth/sessions');
+const { createUserRepository } = require('./repositories/users');
+const { createAuthRouter } = require('./routes/auth');
 const { normalizeExpression, parseQuotedExpression } = require('./expression-text');
 
 function serializeExpression(row) {
@@ -19,10 +20,6 @@ function serializeExpression(row) {
     audioUrl: row.audio_url,
     source: row.source === 'ai' ? 'ai' : 'database'
   };
-}
-
-function serializeUser(user) {
-  return { id: Number(user.id), email: user.email, name: user.name };
 }
 
 function createApp(pool, {
@@ -45,69 +42,7 @@ function createApp(pool, {
     response.json({ status: 'ok', service: 'entrejergas-api' });
   });
 
-  app.post('/api/auth/register', async (request, response) => {
-    const name = typeof request.body?.name === 'string' ? request.body.name.trim() : '';
-    const email = typeof request.body?.email === 'string' ? request.body.email.trim().toLowerCase() : '';
-    const password = typeof request.body?.password === 'string' ? request.body.password : '';
-
-    if (name.length < 2 || name.length > 80) {
-      return response.status(400).json({ error: 'El nombre debe tener entre 2 y 80 caracteres.' });
-    }
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return response.status(400).json({ error: 'Escribe un correo electrónico válido.' });
-    }
-    if (password.length < 8 || password.length > 128) {
-      return response.status(400).json({ error: 'La contraseña debe tener entre 8 y 128 caracteres.' });
-    }
-
-    let user;
-    try {
-      const result = await pool.query(`
-        INSERT INTO users (email, display_name, password_hash)
-        VALUES ($1, $2, $3)
-        RETURNING id, email, display_name AS name
-      `, [email, name, await hashPassword(password)]);
-      user = result.rows[0];
-    } catch (error) {
-      if (error.code === '23505') {
-        return response.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
-      }
-      throw error;
-    }
-
-    await sessions.start(user.id, response);
-    return response.status(201).json({ user: serializeUser(user) });
-  });
-
-  app.post('/api/auth/login', async (request, response) => {
-    const email = typeof request.body?.email === 'string' ? request.body.email.trim().toLowerCase() : '';
-    const password = typeof request.body?.password === 'string' ? request.body.password : '';
-
-    const result = await pool.query(`
-      SELECT id, email, display_name AS name, password_hash
-      FROM users
-      WHERE email = $1
-    `, [email]);
-    const user = result.rows[0];
-
-    if (!user || !await verifyPassword(password, user.password_hash)) {
-      return response.status(401).json({ error: 'Correo o contraseña incorrectos.' });
-    }
-
-    await sessions.start(user.id, response);
-    return response.json({ user: serializeUser(user) });
-  });
-
-  app.get('/api/auth/me', requireAuthentication, (request, response) => {
-    response.json({ user: request.user });
-  });
-
-  app.post('/api/auth/logout', async (request, response) => {
-    const token = readToken(request);
-    if (token) await sessions.end(token);
-    clearSessionCookie(response);
-    return response.status(204).end();
-  });
+  app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, requireAuthentication }));
 
   app.post('/api/lookup', requireAuthentication, async (request, response) => {
     const rawExpression = typeof request.body?.expression === 'string'
