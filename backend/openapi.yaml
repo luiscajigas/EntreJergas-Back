@@ -78,6 +78,41 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+  /api/expressions:
+    get:
+      operationId: searchExpressions
+      summary: Recorre el diccionario con búsqueda, filtro por país y paginación.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: Parte de la expresión. Ignora tildes y mayúsculas. }
+        - { name: country, in: query, schema: { type: string, pattern: '^[A-Z]{2}$' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        '200': { description: Página de resultados., content: { application/json: { schema: { $ref: '#/components/schemas/ExpressionPage' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/game/round:
+    get:
+      operationId: gameRound
+      summary: Devuelve una ronda de ¿De qué país es? con las palabras del diccionario.
+      description: La ronda no incluye la respuesta. Solo participan las expresiones con países conocidos.
+      parameters:
+        - { name: exclude, in: query, schema: { type: string }, description: Ids separados por comas que se prefiere no repetir. }
+      responses:
+        '200': { description: Ronda, o null si no hay palabras suficientes., content: { application/json: { schema: { $ref: '#/components/schemas/GameRoundResponse' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/game/answer:
+    post:
+      operationId: gameAnswer
+      summary: Comprueba una respuesta y devuelve la ficha completa.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerRequest' } } }
+      responses:
+        '200': { description: Resultado., content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerResponse' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/history:
     get:
       operationId: history
@@ -220,6 +255,46 @@ components:
       required: [translation]
       properties:
         translation: { $ref: '#/components/schemas/DefinitionText' }
+    ExpressionPage:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ExpressionEntry' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+    GameRound:
+      type: object
+      required: [id, expression, options]
+      properties:
+        id: { type: integer }
+        expression: { type: string }
+        options:
+          type: array
+          description: Códigos de país. Exactamente uno es correcto.
+          items: { type: string, pattern: '^[A-Z]{2}$' }
+    GameRoundResponse:
+      type: object
+      required: [round]
+      properties:
+        round:
+          oneOf:
+            - $ref: '#/components/schemas/GameRound'
+            - type: 'null'
+    GameAnswerRequest:
+      type: object
+      required: [id, country]
+      properties:
+        id: { type: integer, minimum: 1 }
+        country: { type: string, pattern: '^[A-Z]{2}$' }
+    GameAnswerResponse:
+      type: object
+      required: [correct, entry]
+      properties:
+        correct: { type: boolean }
+        entry: { $ref: '#/components/schemas/ExpressionEntry' }
     HistorySource:
       type: string
       enum: [database, ai, ai_saved, not_found]

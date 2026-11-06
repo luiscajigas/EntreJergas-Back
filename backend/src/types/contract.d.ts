@@ -129,6 +129,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/expressions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recorre el diccionario con búsqueda, filtro por país y paginación. */
+        get: operations["searchExpressions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/game/round": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Devuelve una ronda de ¿De qué país es? con las palabras del diccionario.
+         * @description La ronda no incluye la respuesta. Solo participan las expresiones con países conocidos.
+         */
+        get: operations["gameRound"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/game/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comprueba una respuesta y devuelve la ficha completa. */
+        post: operations["gameAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history": {
         parameters: {
             query?: never;
@@ -254,6 +308,29 @@ export interface components {
         });
         TranslateResponse: {
             translation: components["schemas"]["DefinitionText"];
+        };
+        ExpressionPage: {
+            items: components["schemas"]["ExpressionEntry"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        GameRound: {
+            id: number;
+            expression: string;
+            /** @description Códigos de país. Exactamente uno es correcto. */
+            options: string[];
+        };
+        GameRoundResponse: {
+            round: components["schemas"]["GameRound"] | null;
+        };
+        GameAnswerRequest: {
+            id: number;
+            country: string;
+        };
+        GameAnswerResponse: {
+            correct: boolean;
+            entry: components["schemas"]["ExpressionEntry"];
         };
         /** @enum {string} */
         HistorySource: "database" | "ai" | "ai_saved" | "not_found";
@@ -465,6 +542,85 @@ export interface operations {
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    searchExpressions: {
+        parameters: {
+            query?: {
+                /** @description Parte de la expresión. Ignora tildes y mayúsculas. */
+                q?: string;
+                country?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página de resultados. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpressionPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    gameRound: {
+        parameters: {
+            query?: {
+                /** @description Ids separados por comas que se prefiere no repetir. */
+                exclude?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ronda */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameRoundResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    gameAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GameAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Resultado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameAnswerResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     history: {
