@@ -18,4 +18,4 @@ function normalizeCountries(value) {
   return [...new Set(codes)];
 }
 
-module.exports = { normalizeCountries };
+module.exports = { normalizeCountries, spanishSpeakingCountries };
