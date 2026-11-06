@@ -66,6 +66,8 @@ Lo demás se explica sin guardarse, como `mochila`. Si la verificación rechaza 
 - `POST /api/auth/logout`: revoca la sesión actual.
 - `POST /api/lookup` con `{ "expression": "qué significa boludo" }`: requiere sesión y acepta hasta 300 caracteres. Si el texto completo está en el diccionario, responde sin consultar la IA. Si no, sigue las reglas de la sección *Qué se guarda*. Devuelve una ficha por expresión en `entries` y las no resueltas en `unresolved`; `entry` se conserva por compatibilidad. El historial registra cada expresión por separado.
 - `POST /api/translate` con `{ "id" }` o, para respuestas temporales, con la definición completa: requiere sesión y devuelve la definición en inglés. Las traducciones de expresiones guardadas se conservan en `expression_translations`, así que la IA solo se consulta una vez por expresión; el texto original en español no cambia.
+- `GET /api/expressions?q=&country=&page=&pageSize=`: requiere sesión y recorre el diccionario con búsqueda, filtro por país y paginación.
+- `GET /api/game/round?exclude=` y `POST /api/game/answer` con `{ "id", "country" }`: requieren sesión y sirven para el juego ¿De qué país es?. La ronda no incluye la respuesta, y solo participan las expresiones con países conocidos.
 - `GET /api/history`: requiere sesión y devuelve las últimas 30 búsquedas de esa cuenta.
 - `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
@@ -77,4 +79,4 @@ Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesi
 npm test
 ```
 
-Para revisar los tipos: `npm run typecheck`. Las pruebas usan `pg-mem`, un PostgreSQL emulado en memoria, por lo que no necesitan credenciales ni una instancia local.
+Para revisar los tipos: `npm run typecheck`. Las pruebas no necesitan credenciales ni una instancia local: usan `pg-mem`, un PostgreSQL emulado, y PGlite, un PostgreSQL real en memoria, para la migración y las consultas que `pg-mem` no soporta.
