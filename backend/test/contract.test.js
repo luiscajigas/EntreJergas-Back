@@ -4,10 +4,10 @@ const path = require('node:path');
 const { after, before, test } = require('node:test');
 const { default: Ajv } = require('ajv/dist/2020');
 const { default: addFormats } = require('ajv-formats');
-const { newDb } = require('pg-mem');
 const YAML = require('yaml');
 const { createApp } = require('../src/app');
 const { initializeDatabase } = require('../src/database');
+const { createRealPool } = require('../test-support/real-database');
 
 const contract = YAML.parse(fs.readFileSync(path.join(__dirname, '../openapi.yaml'), 'utf8'));
 const ajv = new Ajv({ strict: false, allErrors: true, validateSchema: false });
@@ -29,8 +29,7 @@ let server;
 let baseUrl;
 
 before(async () => {
-  const { Pool } = newDb().adapters.createPg();
-  pool = new Pool();
+  ({ pool } = createRealPool());
   await initializeDatabase(pool);
   server = createApp(pool, {
     verifyExpression: async () => true,
@@ -96,6 +95,14 @@ test('las respuestas del servidor cumplen el contrato', async () => {
   assertMatchesContract('AuthResponse', await (await fetch(`${baseUrl}/api/auth/me`, { headers })).json());
   assertMatchesContract('HistoryResponse', await (await fetch(`${baseUrl}/api/history`, { headers })).json());
   assertMatchesContract('DashboardResponse', await (await fetch(`${baseUrl}/api/dashboard`, { headers })).json());
+
+  const page = await (await fetch(`${baseUrl}/api/expressions?pageSize=3&country=AR`, { headers })).json();
+  assertMatchesContract('ExpressionPage', page);
+  assert.ok(page.items.length > 0);
+
+  const { round } = await (await fetch(`${baseUrl}/api/game/round`, { headers })).json();
+  assertMatchesContract('GameRound', round);
+  assertMatchesContract('GameAnswerResponse', await (await post('/game/answer', { id: round.id, country: round.options[0] })).json());
 
   const invalid = await post('/lookup', { expression: '' });
   assert.equal(invalid.status, 400);
