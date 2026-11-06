@@ -12,6 +12,8 @@ const { createSearchHistoryRepository } = require('./repositories/search-history
 const { createUserRepository } = require('./repositories/users');
 const { createActivityRouter } = require('./routes/activity');
 const { createAuthRouter } = require('./routes/auth');
+const { createDictionaryRouter } = require('./routes/dictionary');
+const { createGameRouter } = require('./routes/game');
 const { createLookupRouter } = require('./routes/lookup');
 const { createTranslateRouter } = require('./routes/translate');
 
@@ -61,6 +63,8 @@ function createApp(pool, {
   app.use('/api', createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication }));
 
   app.use('/api', createActivityRouter({ expressions, searchHistory, requireAuthentication }));
+  app.use('/api', createDictionaryRouter({ expressions, requireAuthentication }));
+  app.use('/api', createGameRouter({ expressions, requireAuthentication }));
 
   app.use(errorHandler);
 
