@@ -1,14 +1,15 @@
 const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
-const { PGlite } = require('@electric-sql/pglite');
 const { initializeDatabase } = require('../src/database');
 const { seedExpressions } = require('../src/seed-expressions');
+const { createRealPool } = require('../test-support/real-database');
 
 /** PostgreSQL real, en memoria: aquí importa el comportamiento exacto de la migración. */
 let database;
 
 before(async () => {
-  database = new PGlite();
+  const real = createRealPool();
+  database = real.database;
   await database.exec(`
     CREATE TABLE expressions (
       id BIGSERIAL PRIMARY KEY, normalized_expression TEXT NOT NULL UNIQUE, expression TEXT NOT NULL,
@@ -21,14 +22,8 @@ before(async () => {
       ('palabra propia', 'palabra propia', 'Otra.', 'Perú', 'c', 'e', 'x', 'ai');
   `);
 
-  const query = async (text, params) => {
-    if (params?.length) return database.query(text, params);
-    const results = await database.exec(text);
-    return results[results.length - 1] ?? { rows: [] };
-  };
-  const pool = { connect: async () => ({ query, release() {} }) };
-  await initializeDatabase(pool);
-  await initializeDatabase(pool);
+  await initializeDatabase(real.pool);
+  await initializeDatabase(real.pool);
 });
 
 after(async () => {
