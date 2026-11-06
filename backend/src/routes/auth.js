@@ -1,6 +1,7 @@
 const express = require('express');
 const { hashPassword, verifyPassword } = require('../auth/passwords');
 const { clearSessionCookie, readToken } = require('../auth/sessions');
+const { demoAccount } = require('../demo-account');
 const { reply, replyError } = require('../http-reply');
 
 const uniqueViolation = '23505';
@@ -55,7 +56,8 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
     const email = readText(request.body?.email).trim().toLowerCase();
     const password = readText(request.body?.password);
 
-    if (loginLimiter.isLimited(email)) {
+    // Su contraseña es pública: bloquearla no protege nada y dejaría fuera a quien la esté probando.
+    if (email !== demoAccount.email && loginLimiter.isLimited(email)) {
       replyError(response, 429, 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.', 'rate_limited');
       return;
     }
