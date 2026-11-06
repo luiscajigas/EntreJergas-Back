@@ -38,6 +38,28 @@ function createExpressionRepository(pool) {
       return result.rows;
     },
 
+    /**
+     * @param {{ text: string, country: string | null, limit: number, offset: number }} filters
+     * @returns {Promise<{ items: Schemas['ExpressionEntry'][], total: number }>}
+     */
+    async search({ text, country, limit, offset }) {
+      const pattern = `%${text.replace(/[\\%_]/g, '\\$&')}%`;
+      const where = `normalized_expression LIKE $1 ESCAPE '\\' AND ($2::text IS NULL OR $2 = ANY(countries))`;
+      const [rows, count] = await Promise.all([
+        pool.query(`SELECT * FROM expressions WHERE ${where} ORDER BY normalized_expression LIMIT $3 OFFSET $4`, [pattern, country, limit, offset]),
+        pool.query(`SELECT COUNT(*)::int AS count FROM expressions WHERE ${where}`, [pattern, country])
+      ]);
+      return { items: rows.rows.map(serializeExpression), total: count.rows[0].count };
+    },
+
+    /** @returns {Promise<import('../types/app').GameCandidate[]>} */
+    async listGameCandidates() {
+      const result = await pool.query('SELECT id, expression, countries FROM expressions');
+      return result.rows
+        .filter((row) => Array.isArray(row.countries) && row.countries.length > 0)
+        .map((row) => ({ id: Number(row.id), expression: row.expression, countries: row.countries }));
+    },
+
     /** @param {number} id */
     async findById(id) {
       const result = await pool.query('SELECT * FROM expressions WHERE id = $1', [id]);

@@ -10,6 +10,12 @@ export type Schemas = components['schemas'];
 /** Definición sin identificador, tal como la produce la IA. */
 export type Definition = Schemas['DefinitionText'] & { expression: string };
 
+export interface GameCandidate {
+  id: number;
+  expression: string;
+  countries: string[];
+}
+
 export interface AnalyzedExpression {
   text: string;
   type: 'regional' | 'common' | 'typo' | 'unknown';
