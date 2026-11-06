@@ -31,10 +31,14 @@ src/types/          Tipos generados desde el contrato
 
 El código sigue en JavaScript con JSDoc y `checkJs`: Render no necesita un paso de compilación. `test/contract.test.js` comprueba además, con las respuestas reales, que el servidor cumple el contrato.
 
+## Cuenta de prueba
+
+Al arrancar, el servidor crea `test@gmail.com` con la contraseña `12345677`, que también aparece en la pantalla de ingreso para poder evaluar la aplicación sin registrarse. Es pública: quien entre puede agregar palabras al diccionario compartido y ver el historial de esa cuenta. Se define en `src/demo-account.js`; al quitarla de ahí y del frontend, borra también la fila de `users`.
+
 ## Límites
 
 - Cada cuenta puede hacer 30 llamadas a la IA por minuto; las palabras ya guardadas y las traducciones conservadas no cuentan.
-- Un correo se bloquea 15 minutos tras 10 intentos fallidos de ingreso. El conteo es por correo porque el proxy oculta la IP real, así que alguien podría bloquear temporalmente una cuenta ajena.
+- Un correo, salvo el de la cuenta de prueba, se bloquea 15 minutos tras 10 intentos fallidos de ingreso. El conteo es por correo porque el proxy oculta la IP real, así que alguien podría bloquear temporalmente una cuenta ajena.
 - Los contadores están en memoria: sirven con una sola instancia y se reinician al desplegar.
 
 ## Desarrollo y despliegue
