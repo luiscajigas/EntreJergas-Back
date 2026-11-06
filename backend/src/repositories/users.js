@@ -19,6 +19,15 @@ function createUserRepository(pool) {
       return serializeUser(result.rows[0]);
     },
 
+    /** @param {{ email: string, name: string, passwordHash: string }} user */
+    async createOrResetPassword({ email, name, passwordHash }) {
+      await pool.query(`
+        INSERT INTO users (email, display_name, password_hash)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+      `, [email, name, passwordHash]);
+    },
+
     /** @param {string} email */
     async findCredentials(email) {
       const result = await pool.query(`

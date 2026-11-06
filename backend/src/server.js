@@ -2,6 +2,8 @@ require('dotenv').config();
 
 const { createApp } = require('./app');
 const { initializeDatabase, pool } = require('./database');
+const { ensureDemoAccount } = require('./demo-account');
+const { createUserRepository } = require('./repositories/users');
 
 const port = Number(process.env.PORT) || 3000;
 
@@ -19,6 +21,7 @@ function closeOnSignal(server) {
 async function startServer() {
   try {
     await initializeDatabase();
+    await ensureDemoAccount(createUserRepository(pool));
     const server = createApp(pool).listen(port, () => {
       console.log(`EntreJergas API escuchando en el puerto ${port}`);
     });
