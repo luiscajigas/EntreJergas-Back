@@ -43,6 +43,10 @@ Al arrancar, el servidor crea `test@gmail.com` con la contraseña `12345677`, qu
 - Un correo, salvo el de la cuenta de prueba, se bloquea 15 minutos tras 10 intentos fallidos de ingreso. El conteo es por correo porque el proxy oculta la IP real, así que alguien podría bloquear temporalmente una cuenta ajena.
 - Los contadores están en memoria, con un máximo de 10.000 claves: sirven con una sola instancia y se reinician al desplegar.
 
+## Conexión segura
+
+Usa `sslmode=verify-full` en `DATABASE_URL`. Hoy `sslmode=require` también valida el certificado, pero la biblioteca `pg` avisa que desde su versión 9 dejará de hacerlo.
+
 ## Desarrollo y despliegue
 
 ```sh
@@ -50,7 +54,7 @@ npm install
 npm run dev
 ```
 
-El servidor escucha en `http://localhost:3000`. Para Render, los comandos configurados en `render.yaml` son `npm install` y `npm start`. En el primer arranque se crean `users`, `user_sessions`, `expressions` y `search_history`, y se insertan expresiones semilla sin duplicarlas. En bases existentes se agrega `search_history.user_id` para asociar las consultas nuevas con su cuenta.
+El servidor escucha en `http://localhost:3000`. Render usa los comandos de su panel (`npm install` y `npm start`); `render.yaml` sirve si el servicio se crea como Blueprint. En el primer arranque se crean `users`, `user_sessions`, `expressions` y `search_history`, y se insertan expresiones semilla sin duplicarlas. En bases existentes se agrega `search_history.user_id` para asociar las consultas nuevas con su cuenta.
 
 ## Qué se guarda
 
