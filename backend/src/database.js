@@ -3,7 +3,8 @@ const { seedExpressions } = require('./seed-expressions');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.PGSSLMODE === 'require' || process.env.NODE_ENV === 'production'
+  ssl:
+    process.env.PGSSLMODE === 'require' || process.env.NODE_ENV === 'production'
       ? { rejectUnauthorized: false }
       : false,
   max: 10,
@@ -18,7 +19,9 @@ pool.on('error', (error) => {
 /** @param {Pick<import('pg').Pool, 'connect'>} [databasePool] */
 async function initializeDatabase(databasePool = pool) {
   if (databasePool === pool && !process.env.DATABASE_URL) {
-    throw new Error('Falta DATABASE_URL. Configura la URL de PostgreSQL en el entorno del backend.');
+    throw new Error(
+      'Falta DATABASE_URL. Configura la URL de PostgreSQL en el entorno del backend.'
+    );
   }
 
   const client = await databasePool.connect();
@@ -106,20 +109,36 @@ async function initializeDatabase(databasePool = pool) {
     `);
 
     await client.query('BEGIN');
-    for (const [normalized, expression, meaning, region, context, equivalent, example, countries, register] of seedExpressions) {
-      await client.query(`
+    for (const [
+      normalized,
+      expression,
+      meaning,
+      region,
+      context,
+      equivalent,
+      example,
+      countries,
+      register
+    ] of seedExpressions) {
+      await client.query(
+        `
         INSERT INTO expressions
           (normalized_expression, expression, meaning, region, context, equivalent, example, countries, language_register)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (normalized_expression) DO NOTHING
-      `, [normalized, expression, meaning, region, context, equivalent, example, countries, register]);
+      `,
+        [normalized, expression, meaning, region, context, equivalent, example, countries, register]
+      );
 
       // Completa las filas creadas antes de que existieran estas columnas, sin tocar su definición.
-      await client.query(`
+      await client.query(
+        `
         UPDATE expressions
         SET countries = $1, language_register = $2
         WHERE normalized_expression = $3 AND language_register IS NULL
-      `, [countries, register, normalized]);
+      `,
+        [countries, register, normalized]
+      );
     }
     await client.query('COMMIT');
   } catch (error) {

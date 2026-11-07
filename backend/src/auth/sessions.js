@@ -18,10 +18,13 @@ function createSessionStore(pool) {
       const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString();
 
       await pool.query('DELETE FROM user_sessions WHERE expires_at <= NOW()');
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO user_sessions (token_hash, user_id, expires_at)
         VALUES ($1, $2, $3)
-      `, [hashToken(token), userId, expiresAt]);
+      `,
+        [hashToken(token), userId, expiresAt]
+      );
 
       return token;
     },
@@ -31,13 +34,16 @@ function createSessionStore(pool) {
      * @returns {Promise<import('../types/app').Schemas['User'] | null>}
      */
     async findUser(token) {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT users.id, users.email, users.display_name AS name
         FROM user_sessions
         JOIN users ON users.id = user_sessions.user_id
         WHERE user_sessions.token_hash = $1
           AND user_sessions.expires_at > NOW()
-      `, [hashToken(token)]);
+      `,
+        [hashToken(token)]
+      );
       const row = result.rows[0];
       return row ? { id: Number(row.id), email: row.email, name: row.name } : null;
     },

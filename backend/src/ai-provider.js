@@ -53,7 +53,10 @@ function createAiTranslator(options) {
 
     const translation = validateDefinition(parsed, definition.expression);
     if (!translation) {
-      throw new AiError('Gemini no devolvió todos los campos traducidos.', { code: 'AI_INVALID_RESPONSE', status: 502 });
+      throw new AiError('Gemini no devolvió todos los campos traducidos.', {
+        code: 'AI_INVALID_RESPONSE',
+        status: 502
+      });
     }
 
     return translation;
@@ -72,9 +75,11 @@ function parseAnalyzedExpression(value) {
   if (!text || text.length > maxExpressionLength) return null;
 
   const { type, confidence, register, suggestion } = item;
-  if (type !== 'regional' && type !== 'common' && type !== 'typo' && type !== 'unknown') return null;
+  if (type !== 'regional' && type !== 'common' && type !== 'typo' && type !== 'unknown')
+    return null;
 
-  const definition = type === 'regional' || type === 'common' ? validateDefinition(item, text) : null;
+  const definition =
+    type === 'regional' || type === 'common' ? validateDefinition(item, text) : null;
   if ((type === 'regional' || type === 'common') && !definition) return null;
 
   return {
@@ -83,7 +88,8 @@ function parseAnalyzedExpression(value) {
     confidence: confidence === 'high' || confidence === 'medium' ? confidence : 'low',
     suggestion: typeof suggestion === 'string' && suggestion.trim() ? suggestion.trim() : null,
     countries: normalizeCountries(item.countries),
-    register: register === 'neutral' || register === 'informal' || register === 'vulgar' ? register : null,
+    register:
+      register === 'neutral' || register === 'informal' || register === 'vulgar' ? register : null,
     definition
   };
 }
@@ -104,12 +110,18 @@ function createAiAnalyzer(options) {
 
     const rawItems = parsed?.expressions;
     if (!Array.isArray(rawItems)) {
-      throw new AiError('Gemini no devolvió la lista de expresiones.', { code: 'AI_INVALID_RESPONSE', status: 502 });
+      throw new AiError('Gemini no devolvió la lista de expresiones.', {
+        code: 'AI_INVALID_RESPONSE',
+        status: 502
+      });
     }
 
     const items = rawItems.map(parseAnalyzedExpression).filter((item) => item !== null);
     if (rawItems.length > 0 && items.length === 0) {
-      throw new AiError('Gemini no devolvió expresiones válidas.', { code: 'AI_INVALID_RESPONSE', status: 502 });
+      throw new AiError('Gemini no devolvió expresiones válidas.', {
+        code: 'AI_INVALID_RESPONSE',
+        status: 502
+      });
     }
 
     return items.slice(0, maxExpressions);
@@ -128,7 +140,11 @@ function createAiVerifier(options) {
   return async (item) => {
     const parsed = await requestJson({
       system: verificationPrompt,
-      user: JSON.stringify({ expression: item.text, meaning: item.definition?.meaning, countries: item.countries }),
+      user: JSON.stringify({
+        expression: item.text,
+        meaning: item.definition?.meaning,
+        countries: item.countries
+      }),
       maxTokens: 200
     });
     return parsed?.verified === true;

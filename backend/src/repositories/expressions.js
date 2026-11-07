@@ -25,7 +25,9 @@ function serializeExpression(row) {
 function createExpressionRepository(pool) {
   /** @param {string} normalized */
   const findByNormalized = async (normalized) => {
-    const result = await pool.query('SELECT * FROM expressions WHERE normalized_expression = $1', [normalized]);
+    const result = await pool.query('SELECT * FROM expressions WHERE normalized_expression = $1', [
+      normalized
+    ]);
     return result.rows[0] ? serializeExpression(result.rows[0]) : null;
   };
 
@@ -34,7 +36,9 @@ function createExpressionRepository(pool) {
 
     /** @returns {Promise<{ normalized: string, expression: string }[]>} */
     async listNames() {
-      const result = await pool.query('SELECT normalized_expression AS normalized, expression FROM expressions');
+      const result = await pool.query(
+        'SELECT normalized_expression AS normalized, expression FROM expressions'
+      );
       return result.rows;
     },
 
@@ -46,8 +50,14 @@ function createExpressionRepository(pool) {
       const pattern = `%${text.replace(/[\\%_]/g, '\\$&')}%`;
       const where = `normalized_expression LIKE $1 ESCAPE '\\' AND ($2::text IS NULL OR $2 = ANY(countries))`;
       const [rows, count] = await Promise.all([
-        pool.query(`SELECT * FROM expressions WHERE ${where} ORDER BY normalized_expression LIMIT $3 OFFSET $4`, [pattern, country, limit, offset]),
-        pool.query(`SELECT COUNT(*)::int AS count FROM expressions WHERE ${where}`, [pattern, country])
+        pool.query(
+          `SELECT * FROM expressions WHERE ${where} ORDER BY normalized_expression LIMIT $3 OFFSET $4`,
+          [pattern, country, limit, offset]
+        ),
+        pool.query(`SELECT COUNT(*)::int AS count FROM expressions WHERE ${where}`, [
+          pattern,
+          country
+        ])
       ]);
       return { items: rows.rows.map(serializeExpression), total: count.rows[0].count };
     },
@@ -57,7 +67,11 @@ function createExpressionRepository(pool) {
       const result = await pool.query('SELECT id, expression, countries FROM expressions');
       return result.rows
         .filter((row) => Array.isArray(row.countries) && row.countries.length > 0)
-        .map((row) => ({ id: Number(row.id), expression: row.expression, countries: row.countries }));
+        .map((row) => ({
+          id: Number(row.id),
+          expression: row.expression,
+          countries: row.countries
+        }));
     },
 
     /** @param {number} id */
@@ -72,25 +86,30 @@ function createExpressionRepository(pool) {
      * @param {{ countries: string[], register: Schemas['ExpressionEntry']['register'] }} details
      */
     async saveGenerated(normalized, definition, { countries, register }) {
-      const inserted = await pool.query(`
+      const inserted = await pool.query(
+        `
         INSERT INTO expressions (
           normalized_expression, expression, meaning, region, context,
           equivalent, example, source, countries, language_register
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai', $8, $9)
         ON CONFLICT (normalized_expression) DO NOTHING
         RETURNING *
-      `, [
-        normalized,
-        definition.expression,
-        definition.meaning,
-        definition.region,
-        definition.context,
-        definition.equivalent,
-        definition.example,
-        countries,
-        register
-      ]);
-      return inserted.rows[0] ? serializeExpression(inserted.rows[0]) : findByNormalized(normalized);
+      `,
+        [
+          normalized,
+          definition.expression,
+          definition.meaning,
+          definition.region,
+          definition.context,
+          definition.equivalent,
+          definition.example,
+          countries,
+          register
+        ]
+      );
+      return inserted.rows[0]
+        ? serializeExpression(inserted.rows[0])
+        : findByNormalized(normalized);
     },
 
     /**
@@ -98,11 +117,14 @@ function createExpressionRepository(pool) {
      * @returns {Promise<Schemas['DefinitionText'] | null>}
      */
     async findTranslation(expressionId) {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT meaning, region, context, equivalent, example
         FROM expression_translations
         WHERE expression_id = $1 AND language = 'en'
-      `, [expressionId]);
+      `,
+        [expressionId]
+      );
       return result.rows[0] ?? null;
     },
 
@@ -111,12 +133,15 @@ function createExpressionRepository(pool) {
      * @param {Schemas['DefinitionText']} translation
      */
     async saveTranslation(expressionId, { meaning, region, context, equivalent, example }) {
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO expression_translations
           (expression_id, language, meaning, region, context, equivalent, example)
         VALUES ($1, 'en', $2, $3, $4, $5, $6)
         ON CONFLICT (expression_id, language) DO NOTHING
-      `, [expressionId, meaning, region, context, equivalent, example]);
+      `,
+        [expressionId, meaning, region, context, equivalent, example]
+      );
     },
 
     /** @returns {Promise<number>} */
@@ -137,7 +162,9 @@ function createExpressionRepository(pool) {
       }
       return [...counts]
         .map(([country, count]) => ({ country, count }))
-        .sort((left, right) => right.count - left.count || left.country.localeCompare(right.country));
+        .sort(
+          (left, right) => right.count - left.count || left.country.localeCompare(right.country)
+        );
     }
   };
 }

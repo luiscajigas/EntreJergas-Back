@@ -4,7 +4,9 @@ const sessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 /** @param {import('express').Request} request */
 function readToken(request) {
   const header = request.headers.cookie || '';
-  const cookie = header.split(';').map((value) => value.trim())
+  const cookie = header
+    .split(';')
+    .map((value) => value.trim())
     .find((value) => value.startsWith(`${cookieName}=`));
   return cookie ? cookie.slice(cookieName.length + 1) : null;
 }

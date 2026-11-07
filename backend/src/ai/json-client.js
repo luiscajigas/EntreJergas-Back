@@ -53,11 +53,13 @@ function createJsonClient({
   endpoint = process.env.LLM_API_URL || defaultEndpoint,
   model = process.env.LLM_MODEL || defaultModel,
   fetchImplementation = fetch,
-  waitImplementation = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  waitImplementation = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
   randomImplementation = Math.random
 } = {}) {
   /** @param {number} attempt */
-  const backoffMs = (attempt) => baseBackoffMs * (2 ** attempt) + Math.floor(randomImplementation() * maxJitterMs);
+  const backoffMs = (attempt) =>
+    baseBackoffMs * 2 ** attempt + Math.floor(randomImplementation() * maxJitterMs);
 
   /** @param {{ system: string, user: string, maxTokens: number }} request */
   const send = async ({ system, user, maxTokens }) => {
@@ -86,40 +88,60 @@ function createJsonClient({
           await waitImplementation(backoffMs(attempt));
           continue;
         }
-        throw new AiError(timedOut ? 'Gemini agotó el tiempo de espera.' : 'No fue posible conectar con Gemini.', {
-          status: timedOut ? 504 : 502
-        });
+        throw new AiError(
+          timedOut ? 'Gemini agotó el tiempo de espera.' : 'No fue posible conectar con Gemini.',
+          {
+            status: timedOut ? 504 : 502
+          }
+        );
       }
 
-      if (response.ok) return /** @type {{ choices?: { message?: { content?: unknown } }[] }} */ (await response.json());
+      if (response.ok)
+        return /** @type {{ choices?: { message?: { content?: unknown } }[] }} */ (
+          await response.json()
+        );
 
       const providerMessage = await readProviderMessage(response);
       if (!isTransientStatus(response.status) || !hasRetriesLeft) {
-        throw new AiError(`El proveedor de IA respondió ${response.status}${providerMessage ? `: ${providerMessage}` : '.'}`, {
-          status: response.status
-        });
+        throw new AiError(
+          `El proveedor de IA respondió ${response.status}${providerMessage ? `: ${providerMessage}` : '.'}`,
+          {
+            status: response.status
+          }
+        );
       }
 
       const retryAfterMs = Number(response.headers?.get('retry-after')) * 1000;
-      await waitImplementation(retryAfterMs > 0 ? Math.min(retryAfterMs, maxRetryAfterMs) : backoffMs(attempt));
+      await waitImplementation(
+        retryAfterMs > 0 ? Math.min(retryAfterMs, maxRetryAfterMs) : backoffMs(attempt)
+      );
     }
   };
 
   /** @param {{ system: string, user: string, maxTokens: number }} request */
   return async (request) => {
     if (!apiKey) {
-      throw new AiError('Falta configurar LLM_API_KEY en el backend.', { code: 'AI_NOT_CONFIGURED', status: 503 });
+      throw new AiError('Falta configurar LLM_API_KEY en el backend.', {
+        code: 'AI_NOT_CONFIGURED',
+        status: 503
+      });
     }
 
     const content = (await send(request)).choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
-      throw new AiError('Gemini respondió sin contenido de texto.', { code: 'AI_INVALID_RESPONSE', status: 502 });
+      throw new AiError('Gemini respondió sin contenido de texto.', {
+        code: 'AI_INVALID_RESPONSE',
+        status: 502
+      });
     }
 
     try {
       return JSON.parse(content);
     } catch {
-      throw new AiError('Gemini respondió un JSON inválido.', { code: 'AI_INVALID_RESPONSE', status: 502 });
+      throw new AiError('Gemini respondió un JSON inválido.', {
+        code: 'AI_INVALID_RESPONSE',
+        status: 502
+      });
     }
   };
 }

@@ -17,7 +17,12 @@ const { differsByOneEdit } = require('./text-distance');
  * @param {AnalyzedExpression} item
  */
 function shouldSave(item) {
-  return item.type === 'regional' && item.confidence === 'high' && item.countries.length > 0 && item.definition !== null;
+  return (
+    item.type === 'regional' &&
+    item.confidence === 'high' &&
+    item.countries.length > 0 &&
+    item.definition !== null
+  );
 }
 
 /**
@@ -26,21 +31,39 @@ function shouldSave(item) {
  */
 function describeFailure(error) {
   if (error.code === 'AI_NOT_CONFIGURED') {
-    return { reason: 'not_configured', message: 'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.' };
+    return {
+      reason: 'not_configured',
+      message:
+        'La IA no está configurada en el backend. Revisa la variable LLM_API_KEY; la expresión no se agregó.'
+    };
   }
   if (error.code === 'AI_INVALID_RESPONSE') {
-    return { reason: 'invalid_response', message: 'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.' };
+    return {
+      reason: 'invalid_response',
+      message:
+        'Gemini respondió con un formato que no pude validar. La expresión no se agregó; inténtalo de nuevo.'
+    };
   }
   if (error.status === 429) {
-    return { reason: 'quota_exceeded', message: 'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.' };
+    return {
+      reason: 'quota_exceeded',
+      message:
+        'Gemini alcanzó el límite de solicitudes de este proyecto. Espera a que se restablezca o revisa la cuota en AI Studio; la expresión no se agregó.'
+    };
   }
   const detail = error.status ? ` (error ${error.status})` : '';
-  return { reason: 'provider_unavailable', message: `Gemini no pudo responder${detail}. La expresión no se agregó; inténtalo de nuevo más tarde.` };
+  return {
+    reason: 'provider_unavailable',
+    message: `Gemini no pudo responder${detail}. La expresión no se agregó; inténtalo de nuevo más tarde.`
+  };
 }
 
 const minLengthForTypoCheck = 5;
 
-const notFound = { reason: /** @type {const} */ ('not_found'), message: 'Todavía no tenemos esta expresión en el diccionario.' };
+const notFound = {
+  reason: /** @type {const} */ ('not_found'),
+  message: 'Todavía no tenemos esta expresión en el diccionario.'
+};
 
 /**
  * @param {{
@@ -60,7 +83,7 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
   const verify = async (item, userId) => {
     if (!aiLimiter.tryConsume(userId)) return 'unavailable';
     try {
-      return await verifyExpression(item) ? 'confirmed' : 'rejected';
+      return (await verifyExpression(item)) ? 'confirmed' : 'rejected';
     } catch (error) {
       console.error('No se pudo verificar la expresión:', /** @type {Error} */ (error).message);
       return 'unavailable';
@@ -123,7 +146,11 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
         return {
           entries: [],
           unresolved: [],
-          failure: { reason: 'rate_limited', message: 'Hiciste muchas búsquedas nuevas seguidas. Espera un minuto; la expresión no se agregó.' }
+          failure: {
+            reason: 'rate_limited',
+            message:
+              'Hiciste muchas búsquedas nuevas seguidas. Espera un minuto; la expresión no se agregó.'
+          }
         };
       }
 
@@ -147,13 +174,14 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
 
         const existing = await expressions.findByNormalized(normalized);
         // Una palabra común puede estar a una letra de una jerga: rumbo no es un error de rumba.
-        const similar = existing || item.type === 'common' ? null : await findSimilarExpression(normalized);
+        const similar =
+          existing || item.type === 'common' ? null : await findSimilarExpression(normalized);
         if (similar) {
           outcome.unresolved.push({ text: item.text, reason: 'typo', suggestion: similar });
           continue;
         }
 
-        const entry = existing ?? await toEntry(item, normalized, userId);
+        const entry = existing ?? (await toEntry(item, normalized, userId));
         if (entry) {
           outcome.entries.push(entry);
         } else {

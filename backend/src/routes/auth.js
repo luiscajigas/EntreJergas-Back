@@ -8,13 +8,15 @@ const uniqueViolation = '23505';
 const maxEmailLength = 254;
 
 /** @param {unknown} value */
-const readText = (value) => typeof value === 'string' ? value : '';
+const readText = (value) => (typeof value === 'string' ? value : '');
 
 /** @param {{ name: string, email: string, password: string }} data */
 function validateRegistration({ name, email, password }) {
   if (name.length < 2 || name.length > 80) return 'El nombre debe tener entre 2 y 80 caracteres.';
-  if (email.length > maxEmailLength || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Escribe un correo electrónico válido.';
-  if (password.length < 8 || password.length > 128) return 'La contraseña debe tener entre 8 y 128 caracteres.';
+  if (email.length > maxEmailLength || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return 'Escribe un correo electrónico válido.';
+  if (password.length < 8 || password.length > 128)
+    return 'La contraseña debe tener entre 8 y 128 caracteres.';
   return null;
 }
 
@@ -65,12 +67,17 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
 
     // Su contraseña es pública: bloquearla no protege nada y dejaría fuera a quien la esté probando.
     if (email !== demoAccount.email && loginLimiter.isLimited(email)) {
-      replyError(response, 429, 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.', 'rate_limited');
+      replyError(
+        response,
+        429,
+        'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.',
+        'rate_limited'
+      );
       return;
     }
 
     const credentials = await users.findCredentials(email);
-    if (!credentials || !await verifyPassword(password, credentials.passwordHash)) {
+    if (!credentials || !(await verifyPassword(password, credentials.passwordHash))) {
       loginLimiter.record(email);
       replyError(response, 401, 'Correo o contraseña incorrectos.');
       return;

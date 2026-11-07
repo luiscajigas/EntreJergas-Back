@@ -19,10 +19,22 @@ function assertMatchesContract(schema, body) {
   assert.ok(validate(body), `${schema}: ${JSON.stringify(validate.errors)}`);
 }
 
-const definition = { meaning: 'Significado', region: 'Colombia', context: 'Informal', equivalent: 'Algo', example: 'Un ejemplo.' };
+const definition = {
+  meaning: 'Significado',
+  region: 'Colombia',
+  context: 'Informal',
+  equivalent: 'Algo',
+  example: 'Un ejemplo.'
+};
 const item = (text, overrides = {}) => ({
-  text, type: 'regional', confidence: 'high', suggestion: null, countries: ['AR'], register: 'vulgar',
-  definition: { expression: text, ...definition }, ...overrides
+  text,
+  type: 'regional',
+  confidence: 'high',
+  suggestion: null,
+  countries: ['AR'],
+  register: 'vulgar',
+  definition: { expression: text, ...definition },
+  ...overrides
 });
 let pool;
 let server;
@@ -36,10 +48,15 @@ before(async () => {
     analyzeText: async (text) => {
       if (text === 'nada') return [];
       if (text === 'palabra temporal') return [item(text, { type: 'common', countries: [] })];
-      if (text === 'typo') return [item(text, { type: 'typo', suggestion: 'parcero', definition: null })];
+      if (text === 'typo')
+        return [item(text, { type: 'typo', suggestion: 'parcero', definition: null })];
       return [item(text)];
     },
-    translateDefinition: async ({ expression }) => ({ expression, ...definition, meaning: 'Meaning' })
+    translateDefinition: async ({ expression }) => ({
+      expression,
+      ...definition,
+      meaning: 'Meaning'
+    })
   }).listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -74,9 +91,13 @@ test('las respuestas del servidor cumplen el contrato', async () => {
   });
   assert.equal(registered.status, 201);
   assertMatchesContract('AuthResponse', await registered.json());
-  const headers = { 'content-type': 'application/json', cookie: registered.headers.get('set-cookie').split(';')[0] };
+  const headers = {
+    'content-type': 'application/json',
+    cookie: registered.headers.get('set-cookie').split(';')[0]
+  };
 
-  const post = (route, body) => fetch(`${baseUrl}/api${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  const post = (route, body) =>
+    fetch(`${baseUrl}/api${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const lookups = [];
   for (const expression of ['parcero', 'palabra temporal', '"palabra guardada"', 'nada', 'typo']) {
     const body = await (await post('/lookup', { expression })).json();
@@ -92,17 +113,31 @@ test('las respuestas del servidor cumplen el contrato', async () => {
   const temporary = await post('/translate', lookups[1].entries[0]);
   assertMatchesContract('TranslateResponse', await temporary.json());
 
-  assertMatchesContract('AuthResponse', await (await fetch(`${baseUrl}/api/auth/me`, { headers })).json());
-  assertMatchesContract('HistoryResponse', await (await fetch(`${baseUrl}/api/history`, { headers })).json());
-  assertMatchesContract('DashboardResponse', await (await fetch(`${baseUrl}/api/dashboard`, { headers })).json());
+  assertMatchesContract(
+    'AuthResponse',
+    await (await fetch(`${baseUrl}/api/auth/me`, { headers })).json()
+  );
+  assertMatchesContract(
+    'HistoryResponse',
+    await (await fetch(`${baseUrl}/api/history`, { headers })).json()
+  );
+  assertMatchesContract(
+    'DashboardResponse',
+    await (await fetch(`${baseUrl}/api/dashboard`, { headers })).json()
+  );
 
-  const page = await (await fetch(`${baseUrl}/api/expressions?pageSize=3&country=AR`, { headers })).json();
+  const page = await (
+    await fetch(`${baseUrl}/api/expressions?pageSize=3&country=AR`, { headers })
+  ).json();
   assertMatchesContract('ExpressionPage', page);
   assert.ok(page.items.length > 0);
 
   const { round } = await (await fetch(`${baseUrl}/api/game/round`, { headers })).json();
   assertMatchesContract('GameRound', round);
-  assertMatchesContract('GameAnswerResponse', await (await post('/game/answer', { id: round.id, country: round.options[0] })).json());
+  assertMatchesContract(
+    'GameAnswerResponse',
+    await (await post('/game/answer', { id: round.id, country: round.options[0] })).json()
+  );
 
   const invalid = await post('/lookup', { expression: '' });
   assert.equal(invalid.status, 400);

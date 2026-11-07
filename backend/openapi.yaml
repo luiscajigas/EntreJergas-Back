@@ -14,7 +14,12 @@ paths:
       summary: Confirma que la API y PostgreSQL responden.
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Servicio disponible., content: { application/json: { schema: { $ref: '#/components/schemas/HealthResponse' } } } }
+        '200':
+          {
+            description: Servicio disponible.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/HealthResponse' } } }
+          }
   /api/auth/register:
     post:
       operationId: register
@@ -24,7 +29,11 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '201': { description: Cuenta creada., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
+        '201':
+          {
+            description: Cuenta creada.,
+            content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } }
+          }
         '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /api/auth/login:
@@ -36,7 +45,11 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Sesión iniciada., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
+        '200':
+          {
+            description: Sesión iniciada.,
+            content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } }
+          }
         '401': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
   /api/auth/me:
@@ -45,7 +58,11 @@ paths:
       summary: Devuelve la cuenta de la sesión actual.
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Sesión activa., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
+        '200':
+          {
+            description: Sesión activa.,
+            content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } }
+          }
         '401': { $ref: '#/components/responses/Error' }
   /api/auth/logout:
     post:
@@ -66,7 +83,12 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/LookupRequest' } } }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Resultado de la búsqueda., content: { application/json: { schema: { $ref: '#/components/schemas/LookupResponse' } } } }
+        '200':
+          {
+            description: Resultado de la búsqueda.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/LookupResponse' } } }
+          }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /api/translate:
@@ -79,7 +101,12 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/TranslateRequest' } } }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Definición traducida., content: { application/json: { schema: { $ref: '#/components/schemas/TranslateResponse' } } } }
+        '200':
+          {
+            description: Definición traducida.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/TranslateResponse' } } }
+          }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -90,13 +117,27 @@ paths:
       operationId: searchExpressions
       summary: Recorre el diccionario con búsqueda, filtro por país y paginación.
       parameters:
-        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: Parte de la expresión. Ignora tildes y mayúsculas. }
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, maxLength: 100 },
+            description: Parte de la expresión. Ignora tildes y mayúsculas.
+          }
         - { name: country, in: query, schema: { type: string, pattern: '^[A-Z]{2}$' } }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+          }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Página de resultados., content: { application/json: { schema: { $ref: '#/components/schemas/ExpressionPage' } } } }
+        '200':
+          {
+            description: Página de resultados.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/ExpressionPage' } } }
+          }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
   /api/game/round:
@@ -105,10 +146,21 @@ paths:
       summary: Devuelve una ronda de ¿De qué país es? con las palabras del diccionario.
       description: La ronda no incluye la respuesta. Solo participan las expresiones con países conocidos.
       parameters:
-        - { name: exclude, in: query, schema: { type: string }, description: Ids separados por comas que se prefiere no repetir. }
+        - {
+            name: exclude,
+            in: query,
+            schema: { type: string },
+            description: Ids separados por comas que se prefiere no repetir.
+          }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Ronda, o null si no hay palabras suficientes., content: { application/json: { schema: { $ref: '#/components/schemas/GameRoundResponse' } } } }
+        '200':
+          {
+            description: Ronda,
+            o null si no hay palabras suficientes.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/GameRoundResponse' } } }
+          }
         '401': { $ref: '#/components/responses/Error' }
   /api/game/answer:
     post:
@@ -116,10 +168,16 @@ paths:
       summary: Comprueba una respuesta y devuelve la ficha completa.
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerRequest' } } }
+        content:
+          { application/json: { schema: { $ref: '#/components/schemas/GameAnswerRequest' } } }
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Resultado., content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerResponse' } } } }
+        '200':
+          {
+            description: Resultado.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/GameAnswerResponse' } } }
+          }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -129,7 +187,12 @@ paths:
       summary: Devuelve las últimas 30 búsquedas de la cuenta.
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Historial., content: { application/json: { schema: { $ref: '#/components/schemas/HistoryResponse' } } } }
+        '200':
+          {
+            description: Historial.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/HistoryResponse' } } }
+          }
         '401': { $ref: '#/components/responses/Error' }
   /api/dashboard:
     get:
@@ -137,7 +200,12 @@ paths:
       summary: Devuelve las cifras del diccionario y de la cuenta.
       responses:
         default: { $ref: '#/components/responses/Error' }
-        '200': { description: Cifras., content: { application/json: { schema: { $ref: '#/components/schemas/DashboardResponse' } } } }
+        '200':
+          {
+            description: Cifras.,
+            content:
+              { application/json: { schema: { $ref: '#/components/schemas/DashboardResponse' } } }
+          }
         '401': { $ref: '#/components/responses/Error' }
 components:
   responses:
@@ -223,14 +291,23 @@ components:
               description: Solo en definiciones temporales. Una palabra común se explica, pero no se guarda.
     LookupFailureReason:
       type: string
-      enum: [not_found, not_configured, invalid_response, quota_exceeded, provider_unavailable, rate_limited]
+      enum:
+        [
+          not_found,
+          not_configured,
+          invalid_response,
+          quota_exceeded,
+          provider_unavailable,
+          rate_limited
+        ]
     UnresolvedExpression:
       type: object
       required: [text, reason, suggestion]
       properties:
         text: { type: string }
         reason: { type: string, enum: [typo, unknown] }
-        suggestion: { type: [string, 'null'], description: Forma correcta si parece un error de escritura. }
+        suggestion:
+          { type: [string, 'null'], description: Forma correcta si parece un error de escritura. }
     LookupResponse:
       type: object
       required: [found, entries, unresolved]

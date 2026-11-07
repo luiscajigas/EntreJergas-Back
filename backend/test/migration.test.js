@@ -30,7 +30,9 @@ after(async () => {
   await database.close();
 });
 
-const find = async (normalized) => (await database.query('SELECT * FROM expressions WHERE normalized_expression = $1', [normalized])).rows[0];
+const find = async (normalized) =>
+  (await database.query('SELECT * FROM expressions WHERE normalized_expression = $1', [normalized]))
+    .rows[0];
 
 test('completa los países de las semillas sin cambiar la definición guardada', async () => {
   const boludo = await find('boludo');

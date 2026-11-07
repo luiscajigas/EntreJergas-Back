@@ -33,7 +33,13 @@ function createDictionaryRouter({ expressions, requireAuthentication }) {
     const pageSize = readPositiveInteger(rawPageSize, defaultPageSize);
     const validCountry = country === undefined || isCountryCode(country);
 
-    if (text.length > maxExpressionLength || !page || !pageSize || pageSize > maxPageSize || !validCountry) {
+    if (
+      text.length > maxExpressionLength ||
+      !page ||
+      !pageSize ||
+      pageSize > maxPageSize ||
+      !validCountry
+    ) {
       replyError(response, 400, 'Los filtros de búsqueda no son válidos.');
       return;
     }

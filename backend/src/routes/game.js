@@ -23,7 +23,9 @@ function createGameRouter({ expressions, requireAuthentication }) {
 
   router.get('/game/round', requireAuthentication, async (request, response) => {
     const candidates = await expressions.listGameCandidates();
-    reply(response, 'GameRoundResponse', { round: buildRound(candidates, { exclude: readExcludedIds(request.query.exclude) }) });
+    reply(response, 'GameRoundResponse', {
+      round: buildRound(candidates, { exclude: readExcludedIds(request.query.exclude) })
+    });
   });
 
   router.post('/game/answer', requireAuthentication, async (request, response) => {

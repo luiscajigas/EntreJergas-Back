@@ -38,12 +38,27 @@ function createLookupRouter({ lookupService, searchHistory, requireAuthenticatio
     const userId = request.user.id;
     /** @type {{ expression: string, found: boolean, source: Schemas['HistorySource'] }[]} */
     const searches = [
-      ...entries.map((entry) => ({ expression: entry.expression, found: true, source: historySource(entry) })),
-      ...unresolved.map(({ text: expression }) => ({ expression, found: false, source: /** @type {const} */ ('not_found') }))
+      ...entries.map((entry) => ({
+        expression: entry.expression,
+        found: true,
+        source: historySource(entry)
+      })),
+      ...unresolved.map(({ text: expression }) => ({
+        expression,
+        found: false,
+        source: /** @type {const} */ ('not_found')
+      }))
     ];
-    if (searches.length === 0) searches.push({ expression: text, found: false, source: 'not_found' });
+    if (searches.length === 0)
+      searches.push({ expression: text, found: false, source: 'not_found' });
     for (const { expression, found, source } of searches) {
-      await searchHistory.record({ userId, expression, normalized: normalizeExpression(expression), found, source });
+      await searchHistory.record({
+        userId,
+        expression,
+        normalized: normalizeExpression(expression),
+        found,
+        source
+      });
     }
 
     reply(response, 'LookupResponse', {

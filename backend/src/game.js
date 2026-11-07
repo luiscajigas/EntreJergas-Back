@@ -36,13 +36,20 @@ function buildRound(candidates, { exclude = [], random = Math.random } = {}) {
   const correct = chosen.countries[Math.floor(random() * chosen.countries.length)];
 
   // Primero países con palabras en el diccionario: así las opciones son creíbles.
-  const inDictionary = shuffle([...new Set(candidates.flatMap((candidate) => candidate.countries))], random);
+  const inDictionary = shuffle(
+    [...new Set(candidates.flatMap((candidate) => candidate.countries))],
+    random
+  );
   const others = shuffle([...spanishSpeakingCountries], random);
   const wrong = [...new Set([...inDictionary, ...others])]
     .filter((country) => !chosen.countries.includes(country))
     .slice(0, optionCount - 1);
 
-  return { id: chosen.id, expression: chosen.expression, options: shuffle([correct, ...wrong], random) };
+  return {
+    id: chosen.id,
+    expression: chosen.expression,
+    options: shuffle([correct, ...wrong], random)
+  };
 }
 
 module.exports = { buildRound };

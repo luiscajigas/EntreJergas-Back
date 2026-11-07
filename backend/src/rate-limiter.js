@@ -41,7 +41,9 @@ function createRateLimiter({ max, windowMs, maxKeys = 10000, now = Date.now }) {
     isLimited,
     record,
     /** @param {string | number} key */
-    reset: (key) => { windows.delete(key); },
+    reset: (key) => {
+      windows.delete(key);
+    },
     /**
      * Comprueba el límite y, si hay cupo, cuenta este uso.
      * @param {string | number} key

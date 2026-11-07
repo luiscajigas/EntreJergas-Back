@@ -22,13 +22,20 @@ function pickTranslation({ meaning, region, context, equivalent, example }) {
  *   requireAuthentication: import('express').RequestHandler
  * }} dependencies
  */
-function createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication }) {
+function createTranslateRouter({
+  expressions,
+  translateDefinition,
+  aiLimiter,
+  requireAuthentication
+}) {
   const router = express.Router();
 
   /** @param {{ expression?: unknown } | undefined} body */
   const readTemporaryDefinition = (body) => {
     const expression = typeof body?.expression === 'string' ? body.expression.trim() : '';
-    return expression && expression.length <= maxExpressionLength ? validateDefinition(body, expression) : null;
+    return expression && expression.length <= maxExpressionLength
+      ? validateDefinition(body, expression)
+      : null;
   };
 
   router.post('/translate', requireAuthentication, async (request, response) => {
@@ -55,7 +62,12 @@ function createTranslateRouter({ expressions, translateDefinition, aiLimiter, re
     }
 
     if (!aiLimiter.tryConsume(request.user.id)) {
-      replyError(response, 429, 'Hiciste muchas traducciones seguidas. Espera un minuto.', 'rate_limited');
+      replyError(
+        response,
+        429,
+        'Hiciste muchas traducciones seguidas. Espera un minuto.',
+        'rate_limited'
+      );
       return;
     }
 

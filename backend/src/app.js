@@ -30,13 +30,16 @@ const { createTranslateRouter } = require('./routes/translate');
  *   loginLimiter?: import('./types/app').RateLimiter
  * }} [options]
  */
-function createApp(pool, {
-  analyzeText = createAiAnalyzer(),
-  verifyExpression = createAiVerifier(),
-  translateDefinition = createAiTranslator(),
-  aiLimiter = createRateLimiter({ max: 30, windowMs: 60 * 1000 }),
-  loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 })
-} = {}) {
+function createApp(
+  pool,
+  {
+    analyzeText = createAiAnalyzer(),
+    verifyExpression = createAiVerifier(),
+    translateDefinition = createAiTranslator(),
+    aiLimiter = createRateLimiter({ max: 30, windowMs: 60 * 1000 }),
+    loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 })
+  } = {}
+) {
   const app = express();
   app.disable('x-powered-by');
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
@@ -52,16 +55,36 @@ function createApp(pool, {
   app.get('/api/health', async (_request, response) => {
     await pool.query('SELECT 1');
     const version = process.env.RENDER_GIT_COMMIT?.slice(0, 7);
-    reply(response, 'HealthResponse', { status: 'ok', service: 'entrejergas-api', ...(version ? { version } : {}) });
+    reply(response, 'HealthResponse', {
+      status: 'ok',
+      service: 'entrejergas-api',
+      ...(version ? { version } : {})
+    });
   });
 
-  app.use('/api/auth', createAuthRouter({ users: createUserRepository(pool), sessions, loginLimiter, requireAuthentication }));
+  app.use(
+    '/api/auth',
+    createAuthRouter({
+      users: createUserRepository(pool),
+      sessions,
+      loginLimiter,
+      requireAuthentication
+    })
+  );
 
   const expressions = createExpressionRepository(pool);
   const searchHistory = createSearchHistoryRepository(pool);
-  const lookupService = createLookupService({ expressions, analyzeText, verifyExpression, aiLimiter });
+  const lookupService = createLookupService({
+    expressions,
+    analyzeText,
+    verifyExpression,
+    aiLimiter
+  });
   app.use('/api', createLookupRouter({ lookupService, searchHistory, requireAuthentication }));
-  app.use('/api', createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication }));
+  app.use(
+    '/api',
+    createTranslateRouter({ expressions, translateDefinition, aiLimiter, requireAuthentication })
+  );
 
   app.use('/api', createActivityRouter({ expressions, searchHistory, requireAuthentication }));
   app.use('/api', createDictionaryRouter({ expressions, requireAuthentication }));

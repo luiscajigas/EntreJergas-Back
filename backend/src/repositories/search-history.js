@@ -5,11 +5,14 @@ function createSearchHistoryRepository(pool) {
   return {
     /** @param {{ userId: number, expression: string, normalized: string, found: boolean, source: Schemas['HistorySource'] }} search */
     async record({ userId, expression, normalized, found, source }) {
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO search_history
           (user_id, searched_expression, normalized_expression, found, result_source)
         VALUES ($1, $2, $3, $4, $5)
-      `, [userId, expression, normalized, found, source]);
+      `,
+        [userId, expression, normalized, found, source]
+      );
     },
 
     /**
@@ -18,14 +21,17 @@ function createSearchHistoryRepository(pool) {
      * @returns {Promise<Schemas['HistoryItem'][]>}
      */
     async listForUser(userId, limit = 30) {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT id, searched_expression AS expression, found, result_source AS source,
           created_at AS "createdAt"
         FROM search_history
         WHERE user_id = $1
         ORDER BY id DESC
         LIMIT $2
-      `, [userId, limit]);
+      `,
+        [userId, limit]
+      );
       return result.rows.map((row) => ({ ...row, id: Number(row.id) }));
     },
 
@@ -34,7 +40,10 @@ function createSearchHistoryRepository(pool) {
      * @returns {Promise<number>}
      */
     async countForUser(userId) {
-      const result = await pool.query('SELECT COUNT(*)::int AS count FROM search_history WHERE user_id = $1', [userId]);
+      const result = await pool.query(
+        'SELECT COUNT(*)::int AS count FROM search_history WHERE user_id = $1',
+        [userId]
+      );
       return result.rows[0].count;
     }
   };
