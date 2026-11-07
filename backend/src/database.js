@@ -3,10 +3,8 @@ const { seedExpressions } = require('./seed-expressions');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.PGSSLMODE === 'require' || process.env.NODE_ENV === 'production'
-      ? { rejectUnauthorized: false }
-      : false,
+  // Valida el certificado. Si la URL trae sslmode, pg usa ese valor en lugar de este.
+  ssl: process.env.PGSSLMODE === 'require' || process.env.NODE_ENV === 'production',
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000
