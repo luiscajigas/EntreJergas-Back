@@ -1,6 +1,6 @@
 const express = require('express');
 const { hashPassword, verifyPassword } = require('../auth/passwords');
-const { clearSessionCookie, readToken } = require('../auth/sessions');
+const { clearSessionCookie, readToken, setSessionCookie } = require('../auth/session-cookie');
 const { demoAccount } = require('../demo-account');
 const { reply, replyError } = require('../http-reply');
 
@@ -49,7 +49,7 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
       return;
     }
 
-    await sessions.start(user.id, response);
+    setSessionCookie(response, await sessions.start(user.id));
     reply(response, 'AuthResponse', { user }, 201);
   });
 
@@ -77,7 +77,7 @@ function createAuthRouter({ users, sessions, loginLimiter, requireAuthentication
     }
 
     loginLimiter.reset(email);
-    await sessions.start(credentials.user.id, response);
+    setSessionCookie(response, await sessions.start(credentials.user.id));
     reply(response, 'AuthResponse', { user: credentials.user });
   });
 

@@ -1,5 +1,5 @@
 const { replyError } = require('../http-reply');
-const { clearSessionCookie, readToken } = require('./sessions');
+const { clearSessionCookie, readToken } = require('./session-cookie');
 
 /**
  * @param {import('../types/app').SessionStore} sessions
