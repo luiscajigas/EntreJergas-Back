@@ -4,6 +4,7 @@ const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
 const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
+const { stripWrappingQuotes } = require('../src/expression-text');
 const { seedExpressions } = require('../src/seed-expressions');
 const { differsByOneEdit } = require('../src/text-distance');
 const { createRateLimiter } = require('../src/rate-limiter');
@@ -773,4 +774,12 @@ test('una palabra común a una letra de una jerga se explica y no se toma como e
   assert.deepEqual(result.unresolved, []);
   assert.equal(result.entries[0].expression, 'rumbo');
   assert.equal(result.entries[0].classification, 'common');
+});
+
+test('solo se quitan las comillas que envuelven todo el texto', () => {
+  assert.equal(stripWrappingQuotes('  "hacer vaca" '), 'hacer vaca');
+  assert.equal(stripWrappingQuotes('«pana»'), 'pana');
+  assert.equal(stripWrappingQuotes('"parcero" y "mochila"'), '"parcero" y "mochila"');
+  assert.equal(stripWrappingQuotes('"'), '"');
+  assert.equal(stripWrappingQuotes('parcero'), 'parcero');
 });
