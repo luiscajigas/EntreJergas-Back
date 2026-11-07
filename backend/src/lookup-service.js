@@ -52,10 +52,13 @@ const notFound = { reason: /** @type {const} */ ('not_found'), message: 'Todaví
  */
 function createLookupService({ expressions, analyzeText, verifyExpression, aiLimiter }) {
   /**
+   * Cada verificación es una llamada a la IA, así que también cuenta para el límite.
    * @param {AnalyzedExpression} item
+   * @param {number} userId
    * @returns {Promise<'confirmed' | 'rejected' | 'unavailable'>}
    */
-  const verify = async (item) => {
+  const verify = async (item, userId) => {
+    if (!aiLimiter.tryConsume(userId)) return 'unavailable';
     try {
       return await verifyExpression(item) ? 'confirmed' : 'rejected';
     } catch (error) {
@@ -78,14 +81,15 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
   /**
    * @param {AnalyzedExpression} item
    * @param {string} normalized
+   * @param {number} userId
    * @returns {Promise<Schemas['ExpressionEntry'] | null>}
    */
-  const toEntry = async (item, normalized) => {
+  const toEntry = async (item, normalized, userId) => {
     if (!item.definition) return null;
 
     const { countries, register } = item;
     if (item.type === 'regional') {
-      const verification = await verify(item);
+      const verification = await verify(item, userId);
       // Si el revisor no la reconoce, es mejor no responder que mostrar un significado inventado.
       if (verification === 'rejected') return null;
       if (verification === 'confirmed' && shouldSave(item)) {
@@ -149,7 +153,7 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
           continue;
         }
 
-        const entry = existing ?? await toEntry(item, normalized);
+        const entry = existing ?? await toEntry(item, normalized, userId);
         if (entry) {
           outcome.entries.push(entry);
         } else {

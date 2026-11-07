@@ -783,3 +783,25 @@ test('solo se quitan las comillas que envuelven todo el texto', () => {
   assert.equal(stripWrappingQuotes('"'), '"');
   assert.equal(stripWrappingQuotes('parcero'), 'parcero');
 });
+
+test('las verificaciones cuentan para el límite y sin cupo la palabra se explica sin guardarse', async () => {
+  const { cookie } = await registerUser();
+  let verifications = 0;
+  const server = createApp(pool, {
+    analyzeText: async () => [analyzed('jerga uno'), analyzed('jerga dos')],
+    verifyExpression: async () => { verifications += 1; return true; },
+    aiLimiter: createRateLimiter({ max: 2, windowMs: 60000 })
+  }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+
+  const result = await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: 'jerga uno y jerga dos' })
+  }).then((response) => response.json());
+  await new Promise((resolve) => server.close(resolve));
+
+  assert.equal(verifications, 1);
+  assert.ok(result.entries[0].id);
+  assert.equal(result.entries[1].id, null);
+});
