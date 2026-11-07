@@ -1,10 +1,10 @@
 const express = require('express');
-const { normalizeExpression } = require('../expression-text');
+const { isCountryCode } = require('../countries');
+const { maxExpressionLength, normalizeExpression } = require('../expression-text');
 const { reply, replyError } = require('../http-reply');
 
 const defaultPageSize = 20;
 const maxPageSize = 50;
-const maxQueryLength = 100;
 
 /**
  * @param {unknown} value
@@ -31,9 +31,9 @@ function createDictionaryRouter({ expressions, requireAuthentication }) {
     const text = typeof q === 'string' ? q : '';
     const page = readPositiveInteger(rawPage, 1);
     const pageSize = readPositiveInteger(rawPageSize, defaultPageSize);
-    const validCountry = country === undefined || (typeof country === 'string' && /^[A-Z]{2}$/.test(country));
+    const validCountry = country === undefined || isCountryCode(country);
 
-    if (text.length > maxQueryLength || !page || !pageSize || pageSize > maxPageSize || !validCountry) {
+    if (text.length > maxExpressionLength || !page || !pageSize || pageSize > maxPageSize || !validCountry) {
       replyError(response, 400, 'Los filtros de búsqueda no son válidos.');
       return;
     }

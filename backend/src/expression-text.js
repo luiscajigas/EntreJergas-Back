@@ -1,3 +1,6 @@
+/** Largo máximo de una sola expresión; un texto de búsqueda puede ser más largo. */
+const maxExpressionLength = 100;
+
 /** @param {string} value */
 function normalizeExpression(value) {
   return value
@@ -25,4 +28,4 @@ function stripWrappingQuotes(value) {
   return inner.includes(text[0]) || inner.includes(closingQuote) ? text : inner.trim();
 }
 
-module.exports = { normalizeExpression, stripWrappingQuotes };
+module.exports = { maxExpressionLength, normalizeExpression, stripWrappingQuotes };

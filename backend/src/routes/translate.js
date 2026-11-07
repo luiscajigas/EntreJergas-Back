@@ -1,6 +1,8 @@
 const express = require('express');
 const { validateDefinition } = require('../ai-provider');
+const { maxExpressionLength } = require('../expression-text');
 const { reply, replyError } = require('../http-reply');
+const { isPositiveId } = require('../validation');
 
 /** @typedef {import('../types/app').Schemas} Schemas */
 
@@ -26,15 +28,14 @@ function createTranslateRouter({ expressions, translateDefinition, aiLimiter, re
   /** @param {{ expression?: unknown } | undefined} body */
   const readTemporaryDefinition = (body) => {
     const expression = typeof body?.expression === 'string' ? body.expression.trim() : '';
-    return expression && expression.length <= 100 ? validateDefinition(body, expression) : null;
+    return expression && expression.length <= maxExpressionLength ? validateDefinition(body, expression) : null;
   };
 
   router.post('/translate', requireAuthentication, async (request, response) => {
-    const id = Number(request.body?.id);
-    const savedExpression = Number.isSafeInteger(id) && id > 0;
+    const id = request.body?.id;
     let source;
 
-    if (savedExpression) {
+    if (isPositiveId(id)) {
       const cached = await expressions.findTranslation(id);
       if (cached) {
         reply(response, 'TranslateResponse', { translation: cached });
@@ -67,7 +68,7 @@ function createTranslateRouter({ expressions, translateDefinition, aiLimiter, re
       return;
     }
 
-    if (savedExpression) await expressions.saveTranslation(id, translation);
+    if (isPositiveId(id)) await expressions.saveTranslation(id, translation);
     reply(response, 'TranslateResponse', { translation });
   });
 

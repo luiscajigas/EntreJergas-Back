@@ -154,3 +154,11 @@ test('buildRound nunca ofrece como incorrecto otro país de la misma palabra', (
     assert.equal(options.filter((option) => countries.includes(option)).length, 1);
   }
 });
+
+test('el identificador debe ser un número entero, no algo que se le parezca', async () => {
+  const post = (route, body) => fetch(`${baseUrl}${route}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  for (const id of [[1], '1', true, 1.5, 0, -1]) {
+    assert.equal((await post('/game/answer', { id, country: 'AR' })).status, 400, JSON.stringify(id));
+    assert.equal((await post('/translate', { id })).status, 400, JSON.stringify(id));
+  }
+});

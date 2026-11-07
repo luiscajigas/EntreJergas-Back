@@ -18,4 +18,12 @@ function normalizeCountries(value) {
   return [...new Set(codes)];
 }
 
-module.exports = { normalizeCountries, spanishSpeakingCountries };
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isCountryCode(value) {
+  return typeof value === 'string' && /^[A-Z]{2}$/.test(value);
+}
+
+module.exports = { isCountryCode, normalizeCountries, spanishSpeakingCountries };

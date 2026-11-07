@@ -1,6 +1,8 @@
 const express = require('express');
+const { isCountryCode } = require('../countries');
 const { buildRound } = require('../game');
 const { reply, replyError } = require('../http-reply');
+const { isPositiveId } = require('../validation');
 
 const maxExcluded = 100;
 
@@ -25,9 +27,8 @@ function createGameRouter({ expressions, requireAuthentication }) {
   });
 
   router.post('/game/answer', requireAuthentication, async (request, response) => {
-    const id = Number(request.body?.id);
-    const country = request.body?.country;
-    if (!Number.isSafeInteger(id) || id <= 0 || typeof country !== 'string' || !/^[A-Z]{2}$/.test(country)) {
+    const { id, country } = request.body ?? {};
+    if (!isPositiveId(id) || !isCountryCode(country)) {
       replyError(response, 400, 'La respuesta no es válida.');
       return;
     }
