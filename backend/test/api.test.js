@@ -805,3 +805,27 @@ test('las verificaciones cuentan para el límite y sin cupo la palabra se explic
   assert.ok(result.entries[0].id);
   assert.equal(result.entries[1].id, null);
 });
+
+test('el limitador mantiene acotada la memoria y descarta primero lo más antiguo', () => {
+  let time = 0;
+  const limiter = createRateLimiter({ max: 1, windowMs: 100, maxKeys: 2, now: () => time });
+  limiter.record('a');
+  limiter.record('b');
+  limiter.record('c');
+  assert.equal(limiter.isLimited('a'), false);
+  assert.equal(limiter.isLimited('b'), true);
+  assert.equal(limiter.isLimited('c'), true);
+
+  time = 200;
+  limiter.record('d');
+  assert.equal(limiter.isLimited('b'), false);
+});
+
+test('un correo demasiado largo se rechaza sin contar como intento', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'x'.repeat(255), password: 'password123' })
+  });
+  assert.equal(response.status, 401);
+});

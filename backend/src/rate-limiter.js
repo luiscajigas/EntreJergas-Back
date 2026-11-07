@@ -2,9 +2,9 @@
  * Limitador de ventana fija en memoria. Sirve porque hay una sola instancia del
  * servidor; con varias instancias habría que compartir el conteo, por ejemplo en Redis.
  *
- * @param {{ max: number, windowMs: number, now?: () => number }} options
+ * @param {{ max: number, windowMs: number, maxKeys?: number, now?: () => number }} options
  */
-function createRateLimiter({ max, windowMs, now = Date.now }) {
+function createRateLimiter({ max, windowMs, maxKeys = 10000, now = Date.now }) {
   /** @type {Map<string | number, { count: number, resetsAt: number }>} */
   const windows = new Map();
 
@@ -17,6 +17,15 @@ function createRateLimiter({ max, windowMs, now = Date.now }) {
   /** @param {string | number} key */
   const isLimited = (key) => (current(key)?.count ?? 0) >= max;
 
+  /** Quita lo vencido y, si no alcanza, lo más antiguo: la memoria usada queda acotada. */
+  const makeRoom = () => {
+    for (const [key, entry] of windows) {
+      if (entry.resetsAt <= now()) windows.delete(key);
+    }
+    const [oldest] = windows.keys();
+    if (windows.size >= maxKeys && oldest !== undefined) windows.delete(oldest);
+  };
+
   /** @param {string | number} key */
   const record = (key) => {
     const entry = current(key);
@@ -24,11 +33,7 @@ function createRateLimiter({ max, windowMs, now = Date.now }) {
       entry.count += 1;
       return;
     }
-    if (windows.size > 10000) {
-      for (const [storedKey, stored] of windows) {
-        if (stored.resetsAt <= now()) windows.delete(storedKey);
-      }
-    }
+    if (windows.size >= maxKeys) makeRoom();
     windows.set(key, { count: 1, resetsAt: now() + windowMs });
   };
 
