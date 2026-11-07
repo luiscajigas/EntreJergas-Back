@@ -757,3 +757,20 @@ test('el ingreso se bloquea tras varios intentos fallidos y un acierto reinicia 
 
   await new Promise((resolve) => limitedServer.close(resolve));
 });
+
+test('una palabra común a una letra de una jerga se explica y no se toma como error', async () => {
+  const { cookie } = await registerUser();
+  const server = createApp(pool, { analyzeText: async (text) => [analyzed(text, { type: 'common', countries: [] })] }).listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+
+  const result = await fetch(`http://127.0.0.1:${server.address().port}/api/lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ expression: 'rumbo' })
+  }).then((response) => response.json());
+  await new Promise((resolve) => server.close(resolve));
+
+  assert.deepEqual(result.unresolved, []);
+  assert.equal(result.entries[0].expression, 'rumbo');
+  assert.equal(result.entries[0].classification, 'common');
+});

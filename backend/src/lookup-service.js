@@ -142,7 +142,8 @@ function createLookupService({ expressions, analyzeText, verifyExpression, aiLim
         seen.add(normalized);
 
         const existing = await expressions.findByNormalized(normalized);
-        const similar = existing ? null : await findSimilarExpression(normalized);
+        // Una palabra común puede estar a una letra de una jerga: rumbo no es un error de rumba.
+        const similar = existing || item.type === 'common' ? null : await findSimilarExpression(normalized);
         if (similar) {
           outcome.unresolved.push({ text: item.text, reason: 'typo', suggestion: similar });
           continue;
