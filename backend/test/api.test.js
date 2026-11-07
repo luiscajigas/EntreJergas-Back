@@ -4,6 +4,7 @@ const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
 const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
+const { errorHandler } = require('../src/error-handler');
 const { stripWrappingQuotes } = require('../src/expression-text');
 const { seedExpressions } = require('../src/seed-expressions');
 const { differsByOneEdit } = require('../src/text-distance');
@@ -828,4 +829,19 @@ test('un correo demasiado largo se rechaza sin contar como intento', async () =>
     body: JSON.stringify({ email: 'x'.repeat(255), password: 'password123' })
   });
   assert.equal(response.status, 401);
+});
+
+test('una ruta inexistente responde JSON y el servidor no revela su tecnología', async () => {
+  const response = await fetch(`${baseUrl}/api/no-existe`);
+  assert.equal(response.status, 404);
+  assert.match(response.headers.get('content-type'), /json/);
+  assert.equal((await response.json()).error, 'La ruta no existe.');
+  assert.equal(response.headers.get('x-powered-by'), null);
+});
+
+test('el manejador de errores delega si la respuesta ya empezó', () => {
+  const failure = new Error('tarde');
+  let delegated = null;
+  errorHandler(failure, {}, { headersSent: true }, (error) => { delegated = error; });
+  assert.equal(delegated, failure);
 });

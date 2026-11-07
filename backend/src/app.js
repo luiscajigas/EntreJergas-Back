@@ -3,7 +3,7 @@ const express = require('express');
 const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('./ai-provider');
 const { createRequireAuthentication } = require('./auth/require-authentication');
 const { createSessionStore } = require('./auth/sessions');
-const { errorHandler } = require('./error-handler');
+const { errorHandler, notFoundHandler } = require('./error-handler');
 const { reply } = require('./http-reply');
 const { createLookupService } = require('./lookup-service');
 const { createRateLimiter } = require('./rate-limiter');
@@ -38,9 +38,10 @@ function createApp(pool, {
   loginLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 })
 } = {}) {
   const app = express();
+  app.disable('x-powered-by');
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:4200')
     .split(',')
-    .map((origin) => origin.trim());
+    .map((origin) => origin.trim().replace(/\/$/, ''));
 
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '10kb' }));
@@ -66,6 +67,7 @@ function createApp(pool, {
   app.use('/api', createDictionaryRouter({ expressions, requireAuthentication }));
   app.use('/api', createGameRouter({ expressions, requireAuthentication }));
 
+  app.use('/api', notFoundHandler);
   app.use(errorHandler);
 
   return app;
