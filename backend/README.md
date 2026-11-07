@@ -13,13 +13,15 @@ La IA se ejecuta solo en el backend. Configura `LLM_API_KEY` en el entorno del s
 ## Estructura
 
 ```text
-openapi.yaml        Contrato de la API: se edita primero
-src/app.js          Crea las piezas y conecta sus dependencias
-src/routes/         Reciben la solicitud, validan y responden
-src/repositories/   Únicas capas con consultas SQL
-src/auth/           Contraseñas, sesiones y middleware
-src/ai-provider.js  Cliente de Gemini: definiciones y traducciones
-src/types/          Tipos generados desde el contrato
+openapi.yaml             Contrato de la API: se edita primero
+src/app.js               Crea las piezas y conecta sus dependencias
+src/lookup-service.js    Regla de negocio: qué se explica y qué se guarda
+src/routes/              Reciben la solicitud, validan y responden
+src/repositories/        Únicas capas con consultas SQL
+src/auth/                Contraseñas, sesiones, cookie y middleware
+src/ai/                  Cliente de Gemini e instrucciones
+src/ai-provider.js       Analizar, verificar y traducir, validando lo que responde la IA
+src/types/               Tipos generados desde el contrato
 ```
 
 ## Contrato y tipos
@@ -37,9 +39,9 @@ Al arrancar, el servidor crea `test@gmail.com` con la contraseña `12345677`, qu
 
 ## Límites
 
-- Cada cuenta puede hacer 30 llamadas a la IA por minuto; las palabras ya guardadas y las traducciones conservadas no cuentan.
+- Cada cuenta puede hacer 30 llamadas a la IA por minuto, y cada análisis, verificación o traducción cuenta como una. Las palabras ya guardadas y las traducciones conservadas no cuentan. Si se acaba el cupo durante una verificación, la palabra se explica sin guardarse.
 - Un correo, salvo el de la cuenta de prueba, se bloquea 15 minutos tras 10 intentos fallidos de ingreso. El conteo es por correo porque el proxy oculta la IP real, así que alguien podría bloquear temporalmente una cuenta ajena.
-- Los contadores están en memoria: sirven con una sola instancia y se reinician al desplegar.
+- Los contadores están en memoria, con un máximo de 10.000 claves: sirven con una sola instancia y se reinician al desplegar.
 
 ## Desarrollo y despliegue
 
@@ -76,6 +78,18 @@ Lo demás se explica sin guardarse, como `mochila`. Si la verificación rechaza 
 - `GET /api/dashboard`: requiere sesión y devuelve métricas del diccionario y consultas de esa cuenta.
 
 Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesión `HttpOnly`, mientras PostgreSQL conserva solo el hash del token. Las sesiones vencen en siete días. Si no hay definición, la búsqueda responde `found: false` con `reason`, un código estable, y `message`, una explicación en español.
+
+## Calidad
+
+```sh
+npm run lint            # ESLint
+npm run format:check    # Prettier
+npm run typecheck       # Tipos con JSDoc y checkJs
+npm run contract:check  # Los tipos generados coinciden con el contrato
+npm test                # Pruebas
+```
+
+GitHub Actions ejecuta todo esto en cada cambio a `main`.
 
 ## Pruebas
 
