@@ -13,6 +13,7 @@ paths:
       operationId: health
       summary: Confirma que la API y PostgreSQL responden.
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Servicio disponible., content: { application/json: { schema: { $ref: '#/components/schemas/HealthResponse' } } } }
   /api/auth/register:
     post:
@@ -22,6 +23,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '201': { description: Cuenta creada., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
@@ -33,6 +35,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Sesión iniciada., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
         '401': { $ref: '#/components/responses/Error' }
         '429': { $ref: '#/components/responses/Error' }
@@ -41,6 +44,7 @@ paths:
       operationId: currentUser
       summary: Devuelve la cuenta de la sesión actual.
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Sesión activa., content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
         '401': { $ref: '#/components/responses/Error' }
   /api/auth/logout:
@@ -48,6 +52,7 @@ paths:
       operationId: logout
       summary: Revoca la sesión actual.
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '204': { description: Sesión cerrada. }
   /api/lookup:
     post:
@@ -60,6 +65,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/LookupRequest' } } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Resultado de la búsqueda., content: { application/json: { schema: { $ref: '#/components/schemas/LookupResponse' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
@@ -72,6 +78,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/TranslateRequest' } } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Definición traducida., content: { application/json: { schema: { $ref: '#/components/schemas/TranslateResponse' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
@@ -88,6 +95,7 @@ paths:
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Página de resultados., content: { application/json: { schema: { $ref: '#/components/schemas/ExpressionPage' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
@@ -99,6 +107,7 @@ paths:
       parameters:
         - { name: exclude, in: query, schema: { type: string }, description: Ids separados por comas que se prefiere no repetir. }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Ronda, o null si no hay palabras suficientes., content: { application/json: { schema: { $ref: '#/components/schemas/GameRoundResponse' } } } }
         '401': { $ref: '#/components/responses/Error' }
   /api/game/answer:
@@ -109,6 +118,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerRequest' } } }
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Resultado., content: { application/json: { schema: { $ref: '#/components/schemas/GameAnswerResponse' } } } }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
@@ -118,6 +128,7 @@ paths:
       operationId: history
       summary: Devuelve las últimas 30 búsquedas de la cuenta.
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Historial., content: { application/json: { schema: { $ref: '#/components/schemas/HistoryResponse' } } } }
         '401': { $ref: '#/components/responses/Error' }
   /api/dashboard:
@@ -125,6 +136,7 @@ paths:
       operationId: dashboard
       summary: Devuelve las cifras del diccionario y de la cuenta.
       responses:
+        default: { $ref: '#/components/responses/Error' }
         '200': { description: Cifras., content: { application/json: { schema: { $ref: '#/components/schemas/DashboardResponse' } } } }
         '401': { $ref: '#/components/responses/Error' }
 components:
@@ -221,15 +233,9 @@ components:
         suggestion: { type: [string, 'null'], description: Forma correcta si parece un error de escritura. }
     LookupResponse:
       type: object
-      required: [found, entry, entries, unresolved]
+      required: [found, entries, unresolved]
       properties:
         found: { type: boolean }
-        entry:
-          deprecated: true
-          description: Primera definición de entries. Se conserva por compatibilidad.
-          oneOf:
-            - $ref: '#/components/schemas/ExpressionEntry'
-            - type: 'null'
         entries:
           type: array
           items: { $ref: '#/components/schemas/ExpressionEntry' }
@@ -314,12 +320,6 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/HistoryItem' }
-    RegionCount:
-      type: object
-      required: [region, count]
-      properties:
-        region: { type: string }
-        count: { type: integer }
     CountryCount:
       type: object
       required: [country, count]
@@ -328,13 +328,10 @@ components:
         count: { type: integer }
     DashboardResponse:
       type: object
-      required: [expressions, searches, regions, countries]
+      required: [expressions, searches, countries]
       properties:
         expressions: { type: integer }
         searches: { type: integer }
-        regions:
-          type: array
-          items: { $ref: '#/components/schemas/RegionCount' }
         countries:
           type: array
           items: { $ref: '#/components/schemas/CountryCount' }

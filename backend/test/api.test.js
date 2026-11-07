@@ -138,26 +138,25 @@ test('lookup prioriza el diccionario y solo guarda lo regional con confianza alt
 
   const known = await lookup('¿Qué chimba?');
   assert.equal(known.found, true);
-  assert.equal(known.entry.expression, 'qué chimba');
-  assert.equal(known.entry.source, 'database');
-  assert.deepEqual(known.entries, [known.entry]);
-  assert.deepEqual(known.entry.countries, ['CO']);
+  assert.equal(known.entries[0].expression, 'qué chimba');
+  assert.equal(known.entries[0].source, 'database');
+  assert.deepEqual(known.entries[0].countries, ['CO']);
   assert.equal(calls, 0);
 
   const saved = await lookup('una jerga nueva');
-  assert.equal(saved.entry.source, 'ai');
-  assert.ok(saved.entry.id);
-  assert.deepEqual(saved.entry.countries, ['AR']);
-  assert.equal(saved.entry.register, 'informal');
+  assert.equal(saved.entries[0].source, 'ai');
+  assert.ok(saved.entries[0].id);
+  assert.deepEqual(saved.entries[0].countries, ['AR']);
+  assert.equal(saved.entries[0].register, 'informal');
   assert.equal(calls, 1);
 
   const repeated = await lookup('«una jerga nueva»');
-  assert.equal(repeated.entry.id, saved.entry.id);
+  assert.equal(repeated.entries[0].id, saved.entries[0].id);
   assert.equal(calls, 1);
 
   const doubtful = await lookup('palabra dudosa');
-  assert.equal(doubtful.entry.id, null);
-  assert.equal(doubtful.entry.classification, 'regional');
+  assert.equal(doubtful.entries[0].id, null);
+  assert.equal(doubtful.entries[0].classification, 'regional');
   await new Promise((resolve, reject) => aiServer.close((error) => error ? reject(error) : resolve()));
 
   const history = await fetch(`${baseUrl}/api/history`, { headers: { cookie } }).then((response) => response.json());
@@ -166,7 +165,6 @@ test('lookup prioriza el diccionario y solo guarda lo regional con confianza alt
   const dashboard = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie } }).then((response) => response.json());
   assert.ok(dashboard.expressions > seedExpressions.length);
   assert.equal(dashboard.searches, 4);
-  assert.ok(dashboard.regions.every((region) => Number.isInteger(region.count)));
   assert.ok(dashboard.countries.some(({ country, count }) => country === 'CO' && count > 0));
   assert.ok(dashboard.countries.some(({ country }) => country === 'MX'));
 });
@@ -585,7 +583,7 @@ test('translate traduce una expresión guardada una sola vez y luego usa la copi
   const headers = { 'content-type': 'application/json', cookie };
 
   const lookup = await fetch(`${url}/lookup`, { method: 'POST', headers, body: JSON.stringify({ expression: 'parcero' }) });
-  const { entry } = await lookup.json();
+  const { entries: [entry] } = await lookup.json();
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const response = await fetch(`${url}/translate`, { method: 'POST', headers, body: JSON.stringify({ id: entry.id }) });

@@ -48,7 +48,6 @@ function createLookupRouter({ lookupService, searchHistory, requireAuthenticatio
 
     reply(response, 'LookupResponse', {
       found: entries.length > 0,
-      entry: entries[0] ?? null,
       entries,
       unresolved,
       ...failure

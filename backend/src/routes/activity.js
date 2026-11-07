@@ -16,13 +16,12 @@ function createActivityRouter({ expressions, searchHistory, requireAuthenticatio
   });
 
   router.get('/dashboard', requireAuthentication, async (request, response) => {
-    const [total, searches, regions, countries] = await Promise.all([
+    const [total, searches, countries] = await Promise.all([
       expressions.count(),
       searchHistory.countForUser(request.user.id),
-      expressions.countByRegion(),
       expressions.countByCountry()
     ]);
-    reply(response, 'DashboardResponse', { expressions: total, searches, regions, countries });
+    reply(response, 'DashboardResponse', { expressions: total, searches, countries });
   });
 
   return router;

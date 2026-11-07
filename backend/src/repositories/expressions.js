@@ -138,17 +138,6 @@ function createExpressionRepository(pool) {
       return [...counts]
         .map(([country, count]) => ({ country, count }))
         .sort((left, right) => right.count - left.count || left.country.localeCompare(right.country));
-    },
-
-    /** @returns {Promise<Schemas['RegionCount'][]>} */
-    async countByRegion() {
-      const result = await pool.query(`
-        SELECT region, COUNT(*)::int AS count
-        FROM expressions
-        GROUP BY region
-        ORDER BY count DESC, region ASC
-      `);
-      return result.rows;
     }
   };
 }

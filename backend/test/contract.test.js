@@ -83,13 +83,13 @@ test('las respuestas del servidor cumplen el contrato', async () => {
     assertMatchesContract('LookupResponse', body);
     lookups.push(body);
   }
-  assert.equal(lookups[1].entry.id, null);
-  assert.equal(lookups[3].entry, null);
+  assert.equal(lookups[1].entries[0].id, null);
+  assert.deepEqual(lookups[3].entries, []);
   assert.equal(lookups[4].unresolved[0].suggestion, 'parcero');
 
-  const saved = await post('/translate', { id: lookups[0].entry.id });
+  const saved = await post('/translate', { id: lookups[0].entries[0].id });
   assertMatchesContract('TranslateResponse', await saved.json());
-  const temporary = await post('/translate', lookups[1].entry);
+  const temporary = await post('/translate', lookups[1].entries[0]);
   assertMatchesContract('TranslateResponse', await temporary.json());
 
   assertMatchesContract('AuthResponse', await (await fetch(`${baseUrl}/api/auth/me`, { headers })).json());

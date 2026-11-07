@@ -290,11 +290,6 @@ export interface components {
         };
         LookupResponse: {
             found: boolean;
-            /**
-             * @deprecated
-             * @description Primera definición de entries. Se conserva por compatibilidad.
-             */
-            entry: components["schemas"]["ExpressionEntry"] | null;
             entries: components["schemas"]["ExpressionEntry"][];
             unresolved: components["schemas"]["UnresolvedExpression"][];
             reason?: components["schemas"]["LookupFailureReason"];
@@ -345,10 +340,6 @@ export interface components {
         HistoryResponse: {
             items: components["schemas"]["HistoryItem"][];
         };
-        RegionCount: {
-            region: string;
-            count: number;
-        };
         CountryCount: {
             country: string;
             count: number;
@@ -356,7 +347,6 @@ export interface components {
         DashboardResponse: {
             expressions: number;
             searches: number;
-            regions: components["schemas"]["RegionCount"][];
             countries: components["schemas"]["CountryCount"][];
         };
     };
@@ -396,6 +386,7 @@ export interface operations {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
             };
+            default: components["responses"]["Error"];
         };
     };
     register: {
@@ -422,6 +413,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     login: {
@@ -448,6 +440,7 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     currentUser: {
@@ -469,6 +462,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     logout: {
@@ -487,6 +481,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            default: components["responses"]["Error"];
         };
     };
     lookup: {
@@ -513,6 +508,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     translate: {
@@ -542,6 +538,7 @@ export interface operations {
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
             502: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     searchExpressions: {
@@ -570,6 +567,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     gameRound: {
@@ -594,6 +592,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     gameAnswer: {
@@ -621,6 +620,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     history: {
@@ -642,6 +642,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
     dashboard: {
@@ -663,6 +664,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
         };
     };
 }
