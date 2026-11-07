@@ -1,12 +1,12 @@
 const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
-const { newDb } = require('pg-mem');
 const { createApp } = require('../src/app');
 const { createAiAnalyzer, createAiTranslator, createAiVerifier } = require('../src/ai-provider');
 const { initializeDatabase } = require('../src/database');
 const { errorHandler } = require('../src/error-handler');
 const { stripWrappingQuotes } = require('../src/expression-text');
 const { seedExpressions } = require('../src/seed-expressions');
+const { createRealPool } = require('../test-support/real-database');
 const { differsByOneEdit } = require('../src/text-distance');
 const { createRateLimiter } = require('../src/rate-limiter');
 
@@ -35,9 +35,7 @@ const analysisContent = (text, fields = {}) => JSON.stringify({ expressions: [{
 }] });
 
 before(async () => {
-  const database = newDb();
-  const { Pool } = database.adapters.createPg();
-  pool = new Pool();
+  ({ pool } = createRealPool());
   await initializeDatabase(pool);
   server = createApp(pool).listen(0);
   await new Promise((resolve) => server.once('listening', resolve));

@@ -83,4 +83,4 @@ Las contraseñas se guardan con `scrypt`; el navegador recibe una cookie de sesi
 npm test
 ```
 
-Para revisar los tipos: `npm run typecheck`. Las pruebas no necesitan credenciales ni una instancia local: usan `pg-mem`, un PostgreSQL emulado, y PGlite, un PostgreSQL real en memoria, para la migración y las consultas que `pg-mem` no soporta.
+Para revisar los tipos: `npm run typecheck`. Las pruebas no necesitan credenciales ni una instancia local: usan PGlite, un PostgreSQL real en memoria.
